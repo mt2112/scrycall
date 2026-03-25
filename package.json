@@ -1,0 +1,41 @@
+{
+  "name": "scrycall",
+  "version": "0.1.0",
+  "description": "Offline Magic: The Gathering card search CLI backed by SQLite",
+  "type": "module",
+  "main": "dist/cli/index.js",
+  "bin": {
+    "scrycall": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "commander": "^13.1.0",
+    "stream-json": "^1.9.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.0",
+    "@types/stream-json": "^1.7.7",
+    "eslint": "^9.19.0",
+    "@eslint/js": "^9.19.0",
+    "typescript-eslint": "^8.22.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}
