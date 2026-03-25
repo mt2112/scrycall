@@ -183,6 +183,15 @@ function buildTypeQuery(operator: Operator, value: string): SqlQuery {
   };
 }
 
+function buildManaQuery(operator: Operator, value: string): SqlQuery {
+  // Mana cost uses LIKE for substring matching against mana_cost column
+  return {
+    joins: [],
+    where: `cards.mana_cost LIKE ? COLLATE NOCASE`,
+    params: [`%${value}%`],
+  };
+}
+
 function buildOracleQuery(operator: Operator, value: string): SqlQuery {
   // Use FTS5 for oracle text search
   const ftsValue = value.replace(/"/g, '""');
@@ -326,7 +335,7 @@ function buildComparisonSql(
     case 'oracle':
       return buildOracleQuery(operator, value);
     case 'mana':
-      return buildTypeQuery(operator, value); // simplified: match mana_cost string
+      return buildManaQuery(operator, value);
     case 'manaValue':
       return buildManaValueQuery(operator, value);
     case 'power':
