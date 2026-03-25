@@ -69,31 +69,36 @@ function buildColorQuery(
   value: string,
 ): SqlQuery {
   const colors = parseColors(value);
-  const alias = nextAlias('cc');
+  const colorTable = table === 'color' ? 'card_colors' : 'card_color_identity';
 
   if (operator === ':' || operator === '>=' || operator === '>') {
     // Superset: card has at least these colors
     if (colors.length === 0) {
-      // colorless or "any" — all cards match for >=
+      if (operator === ':') {
+        // c:colorless means "has no colors"
+        return {
+          joins: [],
+          where: `NOT EXISTS (SELECT 1 FROM ${colorTable} WHERE card_id = cards.id)`,
+          params: [],
+        };
+      }
+      // colorless for >= or > — all cards match (superset of empty)
       return { joins: [], where: '1=1', params: [] };
     }
     const placeholders = colors.map(() => '?').join(', ');
-    const join = `JOIN card_${table === 'color' ? 'colors' : 'color_identity'} ${alias} ON ${alias}.card_id = cards.id AND ${alias}.color IN (${placeholders})`;
 
     if (operator === '>') {
       // Strict superset: has all these colors AND at least one more
-      const alias2 = nextAlias('cc');
-      const totalJoin = `JOIN card_${table === 'color' ? 'colors' : 'color_identity'} ${alias2} ON ${alias2}.card_id = cards.id`;
       return {
-        joins: [join, totalJoin],
-        where: `1=1 GROUP BY cards.id HAVING COUNT(DISTINCT ${alias}.color) = ? AND COUNT(DISTINCT ${alias2}.color) > ?`,
+        joins: [],
+        where: `cards.id IN (SELECT card_id FROM ${colorTable} WHERE color IN (${placeholders}) GROUP BY card_id HAVING COUNT(DISTINCT color) = ?) AND cards.id IN (SELECT card_id FROM ${colorTable} GROUP BY card_id HAVING COUNT(DISTINCT color) > ?)`,
         params: [...colors, colors.length, colors.length],
       };
     }
 
     return {
-      joins: [join],
-      where: `1=1 GROUP BY cards.id HAVING COUNT(DISTINCT ${alias}.color) = ?`,
+      joins: [],
+      where: `cards.id IN (SELECT card_id FROM ${colorTable} WHERE color IN (${placeholders}) GROUP BY card_id HAVING COUNT(DISTINCT color) = ?)`,
       params: [...colors, colors.length],
     };
   }

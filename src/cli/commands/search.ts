@@ -7,8 +7,9 @@ export function makeSearchCommand(): Command {
   const cmd = new Command('search')
     .description('Search for cards using Scryfall-like query syntax')
     .argument('<query>', 'Search query (e.g., "c:red t:creature pow>=4")')
-    .action((query: string) => {
-      const db = openDatabase();
+    .option('--db <path>', 'Path to database file')
+    .action((query: string, options: { db?: string }) => {
+      const db = openDatabase(options.db);
       try {
         const result = search(db, query);
         if (!result.ok) {

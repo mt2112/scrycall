@@ -7,8 +7,9 @@ export function makeCardCommand(): Command {
   const cmd = new Command('card')
     .description('Display detailed information for a specific card')
     .argument('<name>', 'Card name (e.g., "Lightning Bolt")')
-    .action((name: string) => {
-      const db = openDatabase();
+    .option('--db <path>', 'Path to database file')
+    .action((name: string, options: { db?: string }) => {
+      const db = openDatabase(options.db);
       try {
         const card = getCardByName(db, name);
         if (!card) {
