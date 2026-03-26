@@ -11,7 +11,11 @@ export type SearchField =
   | 'set'
   | 'format'
   | 'keyword'
-  | 'name';
+  | 'name'
+  | 'loyalty'
+  | 'banned'
+  | 'restricted'
+  | 'powtou';
 
 export type Operator = ':' | '=' | '!=' | '>' | '<' | '>=' | '<=';
 
@@ -45,13 +49,19 @@ export type NegateToken = {
   readonly kind: 'negate';
 };
 
+export type ExactNameToken = {
+  readonly kind: 'exactName';
+  readonly value: string;
+};
+
 export type Token =
   | KeywordToken
   | BareWordToken
   | OpenParenToken
   | CloseParenToken
   | OrToken
-  | NegateToken;
+  | NegateToken
+  | ExactNameToken;
 
 // --- AST node types ---
 
@@ -84,9 +94,15 @@ export type NotNode = {
   readonly child: QueryNode;
 };
 
+export type ExactNameNode = {
+  readonly kind: 'exactName';
+  readonly value: string;
+};
+
 export type QueryNode =
   | ComparisonNode
   | TextSearchNode
   | AndNode
   | OrNode
-  | NotNode;
+  | NotNode
+  | ExactNameNode;

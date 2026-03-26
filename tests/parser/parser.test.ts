@@ -139,4 +139,39 @@ describe('parser', () => {
       expect(andNode.right.kind).toBe('or');
     });
   });
+
+  describe('exact name prefix', () => {
+    it('should parse !bolt as ExactNameNode', () => {
+      const result = parseQuery('!bolt');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data).toEqual({ kind: 'exactName', value: 'bolt' });
+    });
+
+    it('should parse !"Lightning Bolt" as ExactNameNode', () => {
+      const result = parseQuery('!"Lightning Bolt"');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data).toEqual({ kind: 'exactName', value: 'Lightning Bolt' });
+    });
+
+    it('should combine exact name with other terms', () => {
+      const result = parseQuery('!"Lightning Bolt" s:m21');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.kind).toBe('and');
+    });
+  });
+
+  describe('and keyword', () => {
+    it('should parse terms with and keyword as implicit AND', () => {
+      const result = parseQuery('t:elf and t:cleric');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.kind).toBe('and');
+      const andNode = result.data as { kind: 'and'; left: QueryNode; right: QueryNode };
+      expect(andNode.left).toEqual({ kind: 'comparison', field: 'type', operator: ':', value: 'elf' });
+      expect(andNode.right).toEqual({ kind: 'comparison', field: 'type', operator: ':', value: 'cleric' });
+    });
+  });
 });

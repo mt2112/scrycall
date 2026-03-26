@@ -39,11 +39,32 @@ const COLOR_ALIASES: Record<string, string[]> = {
   sultai: ['B', 'G', 'U'],
   mardu: ['R', 'W', 'B'],
   temur: ['U', 'R', 'G'],
+  chaos: ['U', 'B', 'R', 'G'],
+  aggression: ['W', 'B', 'R', 'G'],
+  altruism: ['W', 'U', 'R', 'G'],
+  growth: ['W', 'U', 'B', 'G'],
+  artifice: ['W', 'U', 'B', 'R'],
   colorless: [],
   c: [],
 };
 
 let joinCounter = 0;
+
+const FIELD_REFERENCES: Record<string, { sql: string; nullCheck: string }> = {
+  pow: { sql: 'CAST(cards.power AS REAL)', nullCheck: ' AND cards.power IS NOT NULL AND cards.power != \'*\'' },
+  power: { sql: 'CAST(cards.power AS REAL)', nullCheck: ' AND cards.power IS NOT NULL AND cards.power != \'*\'' },
+  tou: { sql: 'CAST(cards.toughness AS REAL)', nullCheck: ' AND cards.toughness IS NOT NULL AND cards.toughness != \'*\'' },
+  toughness: { sql: 'CAST(cards.toughness AS REAL)', nullCheck: ' AND cards.toughness IS NOT NULL AND cards.toughness != \'*\'' },
+  loy: { sql: 'CAST(cards.loyalty AS REAL)', nullCheck: ' AND cards.loyalty IS NOT NULL AND cards.loyalty != \'*\'' },
+  loyalty: { sql: 'CAST(cards.loyalty AS REAL)', nullCheck: ' AND cards.loyalty IS NOT NULL AND cards.loyalty != \'*\'' },
+  cmc: { sql: 'cards.cmc', nullCheck: '' },
+  mv: { sql: 'cards.cmc', nullCheck: '' },
+};
+
+function resolveFieldReference(value: string): { sql: string; nullCheck: string } | null {
+  const lower = value.toLowerCase();
+  return FIELD_REFERENCES[lower] ?? null;
+}
 
 function nextAlias(prefix: string): string {
   return `${prefix}${joinCounter++}`;
@@ -68,8 +89,19 @@ function buildColorQuery(
   operator: Operator,
   value: string,
 ): SqlQuery {
-  const colors = parseColors(value);
+  const lower = value.toLowerCase();
   const colorTable = table === 'color' ? 'card_colors' : 'card_color_identity';
+
+  // Handle multicolor special value
+  if (lower === 'multicolor' || (lower === 'm' && !(lower in COLOR_ALIASES))) {
+    return {
+      joins: [],
+      where: `(SELECT COUNT(*) FROM ${colorTable} WHERE card_id = cards.id) > 1`,
+      params: [],
+    };
+  }
+
+  const colors = parseColors(value);
 
   if (operator === ':' || operator === '>=' || operator === '>') {
     // Superset: card has at least these colors
@@ -212,6 +244,30 @@ function buildNameQuery(value: string): SqlQuery {
 }
 
 function buildManaValueQuery(operator: Operator, value: string): SqlQuery {
+  const lower = value.toLowerCase();
+  if (lower === 'even') {
+    return {
+      joins: [],
+      where: `CAST(cards.cmc AS INTEGER) % 2 = 0`,
+      params: [],
+    };
+  }
+  if (lower === 'odd') {
+    return {
+      joins: [],
+      where: `CAST(cards.cmc AS INTEGER) % 2 = 1`,
+      params: [],
+    };
+  }
+  const ref = resolveFieldReference(value);
+  if (ref) {
+    const sqlOp = operator === ':' ? '=' : operator;
+    return {
+      joins: [],
+      where: `cards.cmc ${sqlOp} ${ref.sql}`,
+      params: [],
+    };
+  }
   const num = parseFloat(value);
   const sqlOp = operator === ':' ? '=' : operator;
   return {
@@ -222,6 +278,15 @@ function buildManaValueQuery(operator: Operator, value: string): SqlQuery {
 }
 
 function buildPowerQuery(operator: Operator, value: string): SqlQuery {
+  const ref = resolveFieldReference(value);
+  if (ref) {
+    const sqlOp = operator === ':' ? '=' : operator;
+    return {
+      joins: [],
+      where: `CAST(cards.power AS REAL) ${sqlOp} ${ref.sql} AND cards.power IS NOT NULL AND cards.power != '*'${ref.nullCheck}`,
+      params: [],
+    };
+  }
   const num = parseFloat(value);
   const sqlOp = operator === ':' ? '=' : operator;
   return {
@@ -232,6 +297,15 @@ function buildPowerQuery(operator: Operator, value: string): SqlQuery {
 }
 
 function buildToughnessQuery(operator: Operator, value: string): SqlQuery {
+  const ref = resolveFieldReference(value);
+  if (ref) {
+    const sqlOp = operator === ':' ? '=' : operator;
+    return {
+      joins: [],
+      where: `CAST(cards.toughness AS REAL) ${sqlOp} ${ref.sql} AND cards.toughness IS NOT NULL AND cards.toughness != '*'${ref.nullCheck}`,
+      params: [],
+    };
+  }
   const num = parseFloat(value);
   const sqlOp = operator === ':' ? '=' : operator;
   return {
@@ -320,6 +394,84 @@ function buildKeywordQuery(operator: Operator, value: string): SqlQuery {
   };
 }
 
+function buildLoyaltyQuery(operator: Operator, value: string): SqlQuery {
+  const ref = resolveFieldReference(value);
+  if (ref) {
+    const sqlOp = operator === ':' ? '=' : operator;
+    return {
+      joins: [],
+      where: `CAST(cards.loyalty AS REAL) ${sqlOp} ${ref.sql} AND cards.loyalty IS NOT NULL AND cards.loyalty != '*'${ref.nullCheck}`,
+      params: [],
+    };
+  }
+  const num = parseFloat(value);
+  const sqlOp = operator === ':' ? '=' : operator;
+  return {
+    joins: [],
+    where: `CAST(cards.loyalty AS REAL) ${sqlOp} ? AND cards.loyalty IS NOT NULL AND cards.loyalty != '*'`,
+    params: [num],
+  };
+}
+
+function buildBannedQuery(operator: Operator, value: string): SqlQuery {
+  const lower = value.toLowerCase();
+  if (operator === '!=') {
+    return {
+      joins: [],
+      where: `NOT EXISTS (SELECT 1 FROM card_legalities WHERE card_id = cards.id AND format = ? AND status = 'banned')`,
+      params: [lower],
+    };
+  }
+  return {
+    joins: [],
+    where: `EXISTS (SELECT 1 FROM card_legalities WHERE card_id = cards.id AND format = ? AND status = 'banned')`,
+    params: [lower],
+  };
+}
+
+function buildRestrictedQuery(operator: Operator, value: string): SqlQuery {
+  const lower = value.toLowerCase();
+  if (operator === '!=') {
+    return {
+      joins: [],
+      where: `NOT EXISTS (SELECT 1 FROM card_legalities WHERE card_id = cards.id AND format = ? AND status = 'restricted')`,
+      params: [lower],
+    };
+  }
+  return {
+    joins: [],
+    where: `EXISTS (SELECT 1 FROM card_legalities WHERE card_id = cards.id AND format = ? AND status = 'restricted')`,
+    params: [lower],
+  };
+}
+
+function buildPowTouQuery(operator: Operator, value: string): SqlQuery {
+  const ref = resolveFieldReference(value);
+  if (ref) {
+    const sqlOp = operator === ':' ? '=' : operator;
+    return {
+      joins: [],
+      where: `(CAST(cards.power AS REAL) + CAST(cards.toughness AS REAL)) ${sqlOp} ${ref.sql} AND cards.power IS NOT NULL AND cards.toughness IS NOT NULL AND cards.power != '*' AND cards.toughness != '*'${ref.nullCheck}`,
+      params: [],
+    };
+  }
+  const num = parseFloat(value);
+  const sqlOp = operator === ':' ? '=' : operator;
+  return {
+    joins: [],
+    where: `(CAST(cards.power AS REAL) + CAST(cards.toughness AS REAL)) ${sqlOp} ? AND cards.power IS NOT NULL AND cards.toughness IS NOT NULL AND cards.power != '*' AND cards.toughness != '*'`,
+    params: [num],
+  };
+}
+
+function buildExactNameQuery(value: string): SqlQuery {
+  return {
+    joins: [],
+    where: `cards.name = ? COLLATE NOCASE`,
+    params: [value],
+  };
+}
+
 function buildComparisonSql(
   field: string,
   operator: Operator,
@@ -352,6 +504,14 @@ function buildComparisonSql(
       return buildKeywordQuery(operator, value);
     case 'name':
       return buildNameQuery(value);
+    case 'loyalty':
+      return buildLoyaltyQuery(operator, value);
+    case 'banned':
+      return buildBannedQuery(operator, value);
+    case 'restricted':
+      return buildRestrictedQuery(operator, value);
+    case 'powtou':
+      return buildPowTouQuery(operator, value);
     default:
       return { joins: [], where: '1=0', params: [] };
   }
@@ -364,6 +524,9 @@ function buildNodeSql(node: QueryNode): SqlQuery {
 
     case 'textSearch':
       return buildNameQuery(node.value);
+
+    case 'exactName':
+      return buildExactNameQuery(node.value);
 
     case 'and': {
       const left = buildNodeSql(node.left);

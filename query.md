@@ -28,10 +28,16 @@ Each field has a short and long form. Fields use an operator (`:`, `=`, `>=`, et
 | `mv`  | `manavalue` | Mana value / CMC (numeric)           | `mv>=3`              |
 | `pow` | `power`     | Power (numeric)                      | `pow>=4`             |
 | `tou` | `toughness` | Toughness (numeric)                  | `tou<=2`             |
+| `pt`  | `powtou`    | Combined power + toughness (numeric) | `pt>=8`              |
+| `loy` | `loyalty`   | Planeswalker loyalty (numeric)       | `loy>=3`             |
 | `r`   | `rarity`    | Rarity                               | `r:mythic`           |
 | `s`   | `set`       | Set code                             | `s:dmu`              |
+| `e`   | `edition`   | Set code (alias for `s:`)            | `e:lea`              |
 | `f`   | `format`    | Format legality                      | `f:modern`           |
 | `kw`  | `keyword`   | Keyword ability                      | `kw:flying`          |
+|       | `name`      | Card name (substring match)          | `name:bolt`          |
+|       | `banned`    | Banned in format                     | `banned:modern`      |
+|       | `restricted`| Restricted in format                 | `restricted:vintage` |
 
 `cmc` is also accepted as an alias for `mv`.
 
@@ -53,10 +59,11 @@ The `:` operator is the default and its behavior depends on the field (see detai
 
 ### Implicit AND
 
-Multiple terms are joined with AND by default:
+Multiple terms are joined with AND by default. The `and` keyword is also accepted but optional:
 
 ```
-c:red t:creature          # red AND creature
+c:red t:creature            # red AND creature
+c:red and t:creature        # same — explicit AND
 t:creature pow>=4 f:modern  # creature AND power>=4 AND modern-legal
 ```
 
@@ -125,6 +132,15 @@ Shards: `esper` (WUB), `grixis` (UBR), `jund` (BRG), `naya` (RGW), `bant` (GWU)
 
 Clans: `abzan` (WBG), `jeskai` (URW), `sultai` (BGU), `mardu` (RWB), `temur` (URG)
 
+Four-color: `chaos` (UBRG), `aggression` (WBRG), `altruism` (WURG), `growth` (WUBG), `artifice` (WUBR)
+
+**Special values:**
+
+| Query            | Meaning                                |
+|------------------|----------------------------------------|
+| `c:multicolor`   | Cards with 2 or more colors            |
+| `c:m`            | Same as `c:multicolor`                 |
+
 ### Color Identity (`id:` / `identity:`)
 
 Same syntax and operators as color, but searches color identity instead of card colors. Color identity includes colors in mana costs and rules text.
@@ -177,6 +193,8 @@ mv=3              # exactly 3 mana value
 mv>=5             # 5 or more
 mv<=2             # 2 or less
 mv:3              # exactly 3 (: treated as =)
+mv:even           # cards with even mana value (0, 2, 4, ...)
+mv:odd            # cards with odd mana value (1, 3, 5, ...)
 ```
 
 ### Power (`pow` / `power`) and Toughness (`tou` / `toughness`)
@@ -187,6 +205,35 @@ Numeric comparison. Cards with variable power/toughness (e.g., `*`) are excluded
 pow>=4            # power 4 or greater
 pow=7             # exactly 7 power
 tou<=2            # toughness 2 or less
+```
+
+**Cross-field comparison:** You can compare one numeric field against another:
+
+```
+pow>tou           # power greater than toughness
+tou>=pow          # toughness >= power
+pow>cmc           # power exceeds mana value
+mv>=loyalty       # mana value >= loyalty
+```
+
+Valid field references: `pow`, `power`, `tou`, `toughness`, `loy`, `loyalty`, `cmc`, `mv`.
+
+### Combined Power+Toughness (`pt` / `powtou`)
+
+Numeric comparison against the sum of power and toughness. Excludes cards with variable (`*`) power or toughness.
+
+```
+pt>=8             # power + toughness >= 8
+pt=14             # power + toughness exactly 14
+```
+
+### Loyalty (`loy` / `loyalty`)
+
+Numeric comparison for planeswalker loyalty:
+
+```
+loy>=3            # loyalty 3 or more
+loy=6             # exactly 6 loyalty
 ```
 
 ### Rarity (`r:` / `rarity:`)
@@ -202,14 +249,14 @@ r>uncommon        # rare or mythic
 r<=uncommon       # common or uncommon
 ```
 
-### Set (`s:` / `set:`)
+### Set (`s:` / `set:` / `e:` / `edition:`)
 
-Match by set code (case-insensitive):
+Match by set code (case-insensitive). `e:` and `edition:` are aliases for `s:`.
 
 ```
 s:dmu             # Dominaria United
-s:lea             # Alpha
-s:neo             # Kamigawa: Neon Dynasty
+e:lea             # Alpha (same as s:lea)
+edition:neo       # Kamigawa: Neon Dynasty
 ```
 
 See [sets.md](sets.md) for the complete list of 551 set codes.
@@ -234,6 +281,16 @@ f!=standard       # cards not legal in standard
 
 `alchemy`, `brawl`, `commander`, `duel`, `future`, `gladiator`, `historic`, `legacy`, `modern`, `oathbreaker`, `oldschool`, `pauper`, `paupercommander`, `penny`, `pioneer`, `predh`, `premodern`, `standard`, `standardbrawl`, `timeless`, `vintage`
 
+### Banned / Restricted
+
+Find cards banned or restricted in a specific format:
+
+```
+banned:modern         # cards banned in modern
+restricted:vintage    # cards restricted in vintage
+-banned:modern        # cards NOT banned in modern
+```
+
 ### Keyword Abilities (`kw:` / `keyword:`)
 
 Match keyword abilities (case-insensitive):
@@ -245,6 +302,25 @@ kw:trample        # cards with trample
 ```
 
 See [keywords.md](keywords.md) for the complete list of 732 keyword abilities.
+
+### Name (`name:`)
+
+Explicit substring search on card name (case-insensitive). Equivalent to bare text search:
+
+```
+name:bolt         # cards with "bolt" in the name
+name:"serra angel" # cards with "serra angel" in the name
+```
+
+### Exact Name (`!`)
+
+Prefix a name with `!` for an exact case-insensitive match:
+
+```
+!"Lightning Bolt"  # exactly "Lightning Bolt"
+!Shock             # exactly "Shock"
+!"serra angel"     # case-insensitive exact match
+```
 
 ## Example Queries
 
@@ -281,6 +357,28 @@ scrycall search "t:elf or t:goblin"
 
 # Find a card by name
 scrycall search "lightning bolt"
+
+# Explicit name field search
+scrycall search "name:bolt"
+
+# Exact name match (case-insensitive)
+scrycall search '!"Lightning Bolt"'
+scrycall search "!Shock"
+
+# Multicolor creatures
+scrycall search "c:multicolor t:creature"
+
+# Cards with even mana value
+scrycall search "mv:even t:creature"
+
+# Planeswalkers with high loyalty
+scrycall search "t:planeswalker loy>=5"
+
+# Cards banned in modern
+scrycall search "banned:modern"
+
+# Creatures where power exceeds toughness
+scrycall search "t:creature pow>tou"
 
 # View detailed card info
 scrycall card "Lightning Bolt"

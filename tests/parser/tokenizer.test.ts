@@ -180,4 +180,135 @@ describe('tokenizer', () => {
       expect(tokens[2]).toEqual({ kind: 'keyword', field: 'power', operator: '>=', value: '4' });
     });
   });
+
+  describe('and keyword skip', () => {
+    it('should skip and between terms', () => {
+      const tokens = tokenize('t:elf and t:cleric');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'type', operator: ':', value: 'elf' },
+        { kind: 'keyword', field: 'type', operator: ':', value: 'cleric' },
+      ]);
+    });
+
+    it('should skip AND (uppercase)', () => {
+      const tokens = tokenize('c:red AND t:creature');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'color', operator: ':', value: 'red' },
+        { kind: 'keyword', field: 'type', operator: ':', value: 'creature' },
+      ]);
+    });
+
+    it('should skip and in parenthesized group', () => {
+      const tokens = tokenize('(t:elf and t:cleric)');
+      expect(tokens).toEqual([
+        { kind: 'openParen' },
+        { kind: 'keyword', field: 'type', operator: ':', value: 'elf' },
+        { kind: 'keyword', field: 'type', operator: ':', value: 'cleric' },
+        { kind: 'closeParen' },
+      ]);
+    });
+  });
+
+  describe('set aliases', () => {
+    it('should tokenize e:war as set field', () => {
+      const tokens = tokenize('e:war');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'set', operator: ':', value: 'war' },
+      ]);
+    });
+
+    it('should tokenize edition:m21 as set field', () => {
+      const tokens = tokenize('edition:m21');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'set', operator: ':', value: 'm21' },
+      ]);
+    });
+  });
+
+  describe('name keyword', () => {
+    it('should tokenize name:bolt', () => {
+      const tokens = tokenize('name:bolt');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'name', operator: ':', value: 'bolt' },
+      ]);
+    });
+
+    it('should tokenize name:"Lightning Bolt"', () => {
+      const tokens = tokenize('name:"Lightning Bolt"');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'name', operator: ':', value: 'Lightning Bolt' },
+      ]);
+    });
+  });
+
+  describe('banned and restricted keywords', () => {
+    it('should tokenize banned:legacy', () => {
+      const tokens = tokenize('banned:legacy');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'banned', operator: ':', value: 'legacy' },
+      ]);
+    });
+
+    it('should tokenize restricted:vintage', () => {
+      const tokens = tokenize('restricted:vintage');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'restricted', operator: ':', value: 'vintage' },
+      ]);
+    });
+  });
+
+  describe('loyalty bare keyword', () => {
+    it('should tokenize loy=3', () => {
+      const tokens = tokenize('loy=3');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'loyalty', operator: '=', value: '3' },
+      ]);
+    });
+
+    it('should tokenize loyalty>=4', () => {
+      const tokens = tokenize('loyalty>=4');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'loyalty', operator: '>=', value: '4' },
+      ]);
+    });
+  });
+
+  describe('powtou bare keyword', () => {
+    it('should tokenize pt>=10', () => {
+      const tokens = tokenize('pt>=10');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'powtou', operator: '>=', value: '10' },
+      ]);
+    });
+
+    it('should tokenize powtou=4', () => {
+      const tokens = tokenize('powtou=4');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'powtou', operator: '=', value: '4' },
+      ]);
+    });
+  });
+
+  describe('exact name prefix', () => {
+    it('should tokenize !bolt as exact name', () => {
+      const tokens = tokenize('!bolt');
+      expect(tokens).toEqual([
+        { kind: 'exactName', value: 'bolt' },
+      ]);
+    });
+
+    it('should tokenize !"Lightning Bolt" as exact name', () => {
+      const tokens = tokenize('!"Lightning Bolt"');
+      expect(tokens).toEqual([
+        { kind: 'exactName', value: 'Lightning Bolt' },
+      ]);
+    });
+
+    it('should not confuse ! with != operator', () => {
+      const tokens = tokenize('c!=red');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'color', operator: '!=', value: 'red' },
+      ]);
+    });
+  });
 });

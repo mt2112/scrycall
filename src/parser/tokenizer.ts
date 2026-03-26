@@ -15,10 +15,15 @@ const KEYWORD_MAP: Record<string, SearchField> = {
   'rarity': 'rarity',
   's': 'set',
   'set': 'set',
+  'e': 'set',
+  'edition': 'set',
   'f': 'format',
   'format': 'format',
   'kw': 'keyword',
   'keyword': 'keyword',
+  'name': 'name',
+  'banned': 'banned',
+  'restricted': 'restricted',
 };
 
 const BARE_KEYWORD_MAP: Record<string, SearchField> = {
@@ -29,6 +34,10 @@ const BARE_KEYWORD_MAP: Record<string, SearchField> = {
   'tou': 'toughness',
   'toughness': 'toughness',
   'cmc': 'manaValue',
+  'loyalty': 'loyalty',
+  'loy': 'loyalty',
+  'pt': 'powtou',
+  'powtou': 'powtou',
 };
 
 function isOperatorChar(ch: string): boolean {
@@ -111,6 +120,23 @@ export function tokenize(input: string): Token[] {
       continue;
     }
 
+    // Exact name prefix (!word or !"quoted string")
+    if (input[pos] === '!' && pos + 1 < input.length && input[pos + 1] !== '=') {
+      pos++; // skip '!'
+      if (pos < input.length && input[pos] === '"') {
+        const { value, end } = readQuotedString(input, pos);
+        tokens.push({ kind: 'exactName', value });
+        pos = end;
+      } else {
+        const { value, end } = readWord(input, pos);
+        if (value.length > 0) {
+          tokens.push({ kind: 'exactName', value });
+        }
+        pos = end;
+      }
+      continue;
+    }
+
     // Read a word and determine what it is
     const { value: word, end: wordEnd } = readWord(input, pos);
     const wordLower = word.toLowerCase();
@@ -118,6 +144,12 @@ export function tokenize(input: string): Token[] {
     // Check for OR keyword
     if (wordLower === 'or') {
       tokens.push({ kind: 'or' });
+      pos = wordEnd;
+      continue;
+    }
+
+    // Skip AND keyword (AND is implicit)
+    if (wordLower === 'and') {
       pos = wordEnd;
       continue;
     }

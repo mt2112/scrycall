@@ -102,6 +102,11 @@ export function parse(tokens: readonly Token[]): Result<QueryNode, ParseError> {
       });
     }
 
+    if (token.kind === 'exactName') {
+      advance();
+      return ok({ kind: 'exactName', value: token.value });
+    }
+
     if (token.kind === 'bareWord') {
       // Collect consecutive bare words into a single text search
       const words: string[] = [];

@@ -104,4 +104,146 @@ describe('query-builder', () => {
       expect(sql).toContain('NOT');
     });
   });
+
+  describe('loyalty queries', () => {
+    it('should build SQL for loyalty exact match', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'loyalty', operator: '=', value: '3' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('CAST(cards.loyalty AS REAL)');
+      expect(sql).toContain('= ?');
+      expect(sql).toContain('loyalty IS NOT NULL');
+      expect(params).toContain(3);
+    });
+
+    it('should build SQL for loyalty range', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'loyalty', operator: '>=', value: '5' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('>= ?');
+      expect(params).toContain(5);
+    });
+  });
+
+  describe('banned and restricted queries', () => {
+    it('should build SQL for banned card lookup', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'banned', operator: ':', value: 'legacy' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('card_legalities');
+      expect(sql).toContain("status = 'banned'");
+      expect(params).toContain('legacy');
+    });
+
+    it('should build SQL for restricted card lookup', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'restricted', operator: ':', value: 'vintage' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('card_legalities');
+      expect(sql).toContain("status = 'restricted'");
+      expect(params).toContain('vintage');
+    });
+
+    it('should build SQL for negated banned', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'banned', operator: '!=', value: 'modern' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('NOT EXISTS');
+      expect(sql).toContain("status = 'banned'");
+      expect(params).toContain('modern');
+    });
+  });
+
+  describe('powtou queries', () => {
+    it('should build SQL for combined power+toughness', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'powtou', operator: '>=', value: '10' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('CAST(cards.power AS REAL)');
+      expect(sql).toContain('CAST(cards.toughness AS REAL)');
+      expect(sql).toContain('>= ?');
+      expect(params).toContain(10);
+    });
+
+    it('should exclude non-numeric power/toughness', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'powtou', operator: '=', value: '4' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("power != '*'");
+      expect(sql).toContain("toughness != '*'");
+    });
+  });
+
+  describe('exact name queries', () => {
+    it('should build SQL for exact name match', () => {
+      const node: QueryNode = { kind: 'exactName', value: 'Lightning Bolt' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('cards.name = ?');
+      expect(sql).toContain('COLLATE NOCASE');
+      expect(params).toContain('Lightning Bolt');
+    });
+  });
+
+  describe('four-color aliases', () => {
+    it('should handle chaos color alias (UBRG)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'chaos' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('card_colors');
+      expect(params).toContain('U');
+      expect(params).toContain('B');
+      expect(params).toContain('R');
+      expect(params).toContain('G');
+    });
+  });
+
+  describe('multicolor queries', () => {
+    it('should build SQL for c:multicolor', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'multicolor' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('COUNT(*)');
+      expect(sql).toContain('card_colors');
+      expect(sql).toContain('> 1');
+    });
+
+    it('should build SQL for c:m (multicolor short form)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'm' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('COUNT(*)');
+      expect(sql).toContain('> 1');
+    });
+  });
+
+  describe('mv:even and mv:odd', () => {
+    it('should build SQL for even mana values', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'manaValue', operator: ':', value: 'even' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('% 2 = 0');
+    });
+
+    it('should build SQL for odd mana values', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'manaValue', operator: ':', value: 'odd' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('% 2 = 1');
+    });
+  });
+
+  describe('cross-field numeric comparison', () => {
+    it('should build pow>tou as column-to-column comparison', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'power', operator: '>', value: 'tou' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('CAST(cards.power AS REAL)');
+      expect(sql).toContain('CAST(cards.toughness AS REAL)');
+      expect(sql).toContain('>');
+      expect(params).toHaveLength(0);
+    });
+
+    it('should build tou=pow as column-to-column comparison', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'toughness', operator: '=', value: 'pow' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('CAST(cards.toughness AS REAL)');
+      expect(sql).toContain('CAST(cards.power AS REAL)');
+      expect(params).toHaveLength(0);
+    });
+
+    it('should build pow>loy as column-to-column comparison', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'power', operator: '>', value: 'loy' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('CAST(cards.power AS REAL)');
+      expect(sql).toContain('CAST(cards.loyalty AS REAL)');
+      expect(params).toHaveLength(0);
+    });
+  });
 });
