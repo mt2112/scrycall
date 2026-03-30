@@ -241,11 +241,11 @@ function buildManaQuery(operator: Operator, value: string): SqlQuery {
 }
 
 function buildOracleQuery(operator: Operator, value: string): SqlQuery {
-  // Use FTS5 for oracle text search
+  // Use FTS5 for oracle text search via subquery to avoid ambiguity with multiple FTS queries
   const ftsValue = value.replace(/"/g, '""');
   return {
-    joins: [`JOIN cards_fts ON cards_fts.rowid = cards.rowid`],
-    where: `cards_fts MATCH ?`,
+    joins: [],
+    where: `cards.id IN (SELECT cards.id FROM cards JOIN cards_fts ON cards_fts.rowid = cards.rowid WHERE cards_fts MATCH ?)`,
     params: [`oracle_text: "${ftsValue}"`],
   };
 }
@@ -253,8 +253,8 @@ function buildOracleQuery(operator: Operator, value: string): SqlQuery {
 function buildNameQuery(value: string): SqlQuery {
   const ftsValue = value.replace(/"/g, '""');
   return {
-    joins: [`JOIN cards_fts ON cards_fts.rowid = cards.rowid`],
-    where: `cards_fts MATCH ?`,
+    joins: [],
+    where: `cards.id IN (SELECT cards.id FROM cards JOIN cards_fts ON cards_fts.rowid = cards.rowid WHERE cards_fts MATCH ?)`,
     params: [`name: "${ftsValue}"`],
   };
 }
