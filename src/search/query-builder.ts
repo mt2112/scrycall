@@ -39,6 +39,11 @@ const COLOR_ALIASES: Record<string, string[]> = {
   sultai: ['B', 'G', 'U'],
   mardu: ['R', 'W', 'B'],
   temur: ['U', 'R', 'G'],
+  silverquill: ['W', 'B'],
+  prismari: ['U', 'R'],
+  witherbloom: ['B', 'G'],
+  lorehold: ['R', 'W'],
+  quandrix: ['G', 'U'],
   chaos: ['U', 'B', 'R', 'G'],
   aggression: ['W', 'B', 'R', 'G'],
   altruism: ['W', 'U', 'R', 'G'],
@@ -98,6 +103,17 @@ function buildColorQuery(
       joins: [],
       where: `(SELECT COUNT(*) FROM ${colorTable} WHERE card_id = cards.id) > 1`,
       params: [],
+    };
+  }
+
+  // Handle numeric color count (e.g., c=2, c>=3, c=0)
+  if (/^\d+$/.test(value)) {
+    const count = parseInt(value, 10);
+    const sqlOp = operator === ':' ? '=' : operator;
+    return {
+      joins: [],
+      where: `(SELECT COUNT(*) FROM ${colorTable} WHERE card_id = cards.id) ${sqlOp} ?`,
+      params: [count],
     };
   }
 
@@ -472,6 +488,105 @@ function buildExactNameQuery(value: string): SqlQuery {
   };
 }
 
+// --- is:/not:/has: condition framework ---
+
+const IS_CONDITIONS: Record<string, () => SqlQuery> = {
+  spell: () => ({
+    joins: [],
+    where: `cards.type_line NOT LIKE '%Land%'`,
+    params: [],
+  }),
+  permanent: () => ({
+    joins: [],
+    where: `(cards.type_line LIKE '%Creature%' OR cards.type_line LIKE '%Artifact%' OR cards.type_line LIKE '%Enchantment%' OR cards.type_line LIKE '%Planeswalker%' OR cards.type_line LIKE '%Land%' OR cards.type_line LIKE '%Battle%')`,
+    params: [],
+  }),
+  historic: () => ({
+    joins: [],
+    where: `(cards.type_line LIKE '%Legendary%' OR cards.type_line LIKE '%Artifact%' OR cards.type_line LIKE '%Saga%')`,
+    params: [],
+  }),
+  vanilla: () => ({
+    joins: [],
+    where: `cards.type_line LIKE '%Creature%' AND (cards.oracle_text IS NULL OR cards.oracle_text = '')`,
+    params: [],
+  }),
+  modal: () => ({
+    joins: [],
+    where: `cards.oracle_text LIKE '%choose one%' OR cards.oracle_text LIKE '%choose two%' OR cards.oracle_text LIKE '%choose three%' OR cards.oracle_text LIKE '%choose four%' OR cards.oracle_text LIKE '%choose five%'`,
+    params: [],
+  }),
+  bear: () => ({
+    joins: [],
+    where: `cards.type_line LIKE '%Creature%' AND cards.power = '2' AND cards.toughness = '2' AND cards.cmc = 2`,
+    params: [],
+  }),
+  hybrid: () => ({
+    joins: [],
+    where: `cards.mana_cost LIKE '%{_/_}%' AND cards.mana_cost NOT LIKE '%{_/P}%'`,
+    params: [],
+  }),
+  phyrexian: () => ({
+    joins: [],
+    where: `cards.mana_cost LIKE '%/P}%'`,
+    params: [],
+  }),
+  party: () => ({
+    joins: [],
+    where: `cards.type_line LIKE '%Creature%' AND (cards.type_line LIKE '%Cleric%' OR cards.type_line LIKE '%Rogue%' OR cards.type_line LIKE '%Warrior%' OR cards.type_line LIKE '%Wizard%')`,
+    params: [],
+  }),
+  outlaw: () => ({
+    joins: [],
+    where: `cards.type_line LIKE '%Creature%' AND (cards.type_line LIKE '%Assassin%' OR cards.type_line LIKE '%Mercenary%' OR cards.type_line LIKE '%Pirate%' OR cards.type_line LIKE '%Rogue%' OR cards.type_line LIKE '%Warlock%')`,
+    params: [],
+  }),
+};
+
+const HAS_CONDITIONS: Record<string, () => SqlQuery> = {
+  pt: () => ({
+    joins: [],
+    where: `cards.power IS NOT NULL AND cards.toughness IS NOT NULL`,
+    params: [],
+  }),
+  loyalty: () => ({
+    joins: [],
+    where: `cards.loyalty IS NOT NULL`,
+    params: [],
+  }),
+};
+
+function buildIsQuery(value: string): SqlQuery {
+  const lower = value.toLowerCase();
+  const condition = IS_CONDITIONS[lower];
+  if (!condition) {
+    return { joins: [], where: '1 = 0', params: [] };
+  }
+  return condition();
+}
+
+function buildNotConditionQuery(value: string): SqlQuery {
+  const inner = buildIsQuery(value);
+  if (inner.where === '1 = 0') {
+    // Unknown condition negated → match all
+    return { joins: [], where: '1 = 1', params: [] };
+  }
+  return {
+    joins: inner.joins,
+    where: `NOT (${inner.where})`,
+    params: inner.params,
+  };
+}
+
+function buildHasQuery(value: string): SqlQuery {
+  const lower = value.toLowerCase();
+  const condition = HAS_CONDITIONS[lower];
+  if (!condition) {
+    return { joins: [], where: '1 = 0', params: [] };
+  }
+  return condition();
+}
+
 function buildComparisonSql(
   field: string,
   operator: Operator,
@@ -512,6 +627,12 @@ function buildComparisonSql(
       return buildRestrictedQuery(operator, value);
     case 'powtou':
       return buildPowTouQuery(operator, value);
+    case 'is':
+      return buildIsQuery(value);
+    case 'not':
+      return buildNotConditionQuery(value);
+    case 'has':
+      return buildHasQuery(value);
     default:
       return { joins: [], where: '1=0', params: [] };
   }

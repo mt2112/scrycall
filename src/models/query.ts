@@ -15,7 +15,10 @@ export type SearchField =
   | 'loyalty'
   | 'banned'
   | 'restricted'
-  | 'powtou';
+  | 'powtou'
+  | 'is'
+  | 'not'
+  | 'has';
 
 export type Operator = ':' | '=' | '!=' | '>' | '<' | '>=' | '<=';
 

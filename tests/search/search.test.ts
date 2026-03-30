@@ -162,3 +162,173 @@ describe('search integration', () => {
     expect(result.data[0].name).toBe('Nicol Bolas');
   });
 });
+
+describe('search integration: is/not/has conditions', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = createTestDb();
+    seedExtendedCards(db);
+  });
+
+  it('should search by is:spell (excludes lands)', () => {
+    const result = search(db, 'is:spell');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const names = result.data.map(c => c.name);
+    expect(names).toContain('Lightning Bolt');
+    expect(names).toContain('Grizzly Bears');
+    expect(names).not.toContain('Forest');
+  });
+
+  it('should search by not:spell (includes lands)', () => {
+    const result = search(db, 'not:spell');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const names = result.data.map(c => c.name);
+    expect(names).toContain('Forest');
+  });
+
+  it('should search by is:permanent', () => {
+    const result = search(db, 'is:permanent');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const names = result.data.map(c => c.name);
+    expect(names).toContain('Grizzly Bears');
+    expect(names).toContain('Forest');
+    expect(names).not.toContain('Lightning Bolt'); // Instants not permanent
+  });
+
+  it('should search by is:vanilla', () => {
+    const result = search(db, 'is:vanilla');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.length).toBe(1);
+    expect(result.data[0].name).toBe('Grizzly Bears');
+  });
+
+  it('should search by is:bear', () => {
+    const result = search(db, 'is:bear');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.length).toBe(1);
+    expect(result.data[0].name).toBe('Grizzly Bears');
+  });
+
+  it('should search by is:hybrid', () => {
+    const result = search(db, 'is:hybrid');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.length).toBe(1);
+    expect(result.data[0].name).toBe('Kitchen Finks');
+  });
+
+  it('should search by has:loyalty', () => {
+    const result = search(db, 'has:loyalty');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.length).toBe(1);
+    expect(result.data[0].name).toBe('Jace Beleren');
+  });
+
+  it('should search by has:pt', () => {
+    const result = search(db, 'has:pt');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const names = result.data.map(c => c.name);
+    expect(names).toContain('Grizzly Bears');
+    expect(names).toContain('Kitchen Finks');
+    expect(names).not.toContain('Lightning Bolt');
+    expect(names).not.toContain('Forest');
+  });
+
+  it('should combine is: with other conditions', () => {
+    const result = search(db, 'is:spell c:green');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Green spells: Grizzly Bears and Kitchen Finks (green+white, is a spell)
+    const names = result.data.map(c => c.name);
+    expect(names).toContain('Grizzly Bears');
+    expect(names).not.toContain('Forest');
+  });
+
+  it('should combine is: with OR', () => {
+    const result = search(db, 'is:vanilla or has:loyalty');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const names = result.data.map(c => c.name);
+    expect(names).toContain('Grizzly Bears');
+    expect(names).toContain('Jace Beleren');
+  });
+});
+
+describe('search integration: numeric color count', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = createTestDb();
+    seedExtendedCards(db);
+  });
+
+  it('should search by c=2 (exactly 2 colors)', () => {
+    const result = search(db, 'c=2');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.length).toBe(1);
+    expect(result.data[0].name).toBe('Kitchen Finks');
+  });
+
+  it('should search by c=0 (colorless)', () => {
+    const result = search(db, 'c=0');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const names = result.data.map(c => c.name);
+    expect(names).toContain('Forest');
+  });
+
+  it('should combine numeric color count with type', () => {
+    const result = search(db, 'c>=1 t:creature');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const names = result.data.map(c => c.name);
+    expect(names).toContain('Grizzly Bears');
+    expect(names).toContain('Kitchen Finks');
+    expect(names).not.toContain('Forest');
+  });
+});
+
+function seedExtendedCards(db: Database.Database): void {
+  const insertCard = db.prepare(
+    `INSERT INTO cards (id, oracle_id, name, mana_cost, cmc, type_line, oracle_text, power, toughness, set_code, set_name, rarity, loyalty)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insertColor = db.prepare('INSERT INTO card_colors (card_id, color) VALUES (?, ?)');
+  const insertIdentity = db.prepare('INSERT INTO card_color_identity (card_id, color) VALUES (?, ?)');
+  const insertKeyword = db.prepare('INSERT INTO card_keywords (card_id, keyword) VALUES (?, ?)');
+
+  // Lightning Bolt - Red Instant (spell, not permanent)
+  insertCard.run('bolt-1', 'oracle-bolt', 'Lightning Bolt', '{R}', 1, 'Instant', 'Lightning Bolt deals 3 damage to any target.', null, null, 'lea', 'Alpha', 'common', null);
+  insertColor.run('bolt-1', 'R');
+  insertIdentity.run('bolt-1', 'R');
+
+  // Grizzly Bears - Green 2/2 Creature (vanilla, bear)
+  insertCard.run('bears-1', 'oracle-bears', 'Grizzly Bears', '{1}{G}', 2, 'Creature — Bear', null, '2', '2', 'lea', 'Alpha', 'common', null);
+  insertColor.run('bears-1', 'G');
+  insertIdentity.run('bears-1', 'G');
+
+  // Forest - Basic Land (not a spell, is permanent)
+  insertCard.run('forest-1', 'oracle-forest', 'Forest', null, 0, 'Basic Land — Forest', null, null, null, 'lea', 'Alpha', 'common', null);
+
+  // Kitchen Finks - G/W Hybrid creature
+  insertCard.run('finks-1', 'oracle-finks', 'Kitchen Finks', '{1}{G/W}{G/W}', 3, 'Creature — Ouphe', 'When Kitchen Finks enters the battlefield, you gain 2 life.\nPersist', '3', '2', 'shm', 'Shadowmoor', 'uncommon', null);
+  insertColor.run('finks-1', 'G');
+  insertColor.run('finks-1', 'W');
+  insertIdentity.run('finks-1', 'G');
+  insertIdentity.run('finks-1', 'W');
+  insertKeyword.run('finks-1', 'Persist');
+
+  // Jace Beleren - Blue Planeswalker
+  insertCard.run('jace-1', 'oracle-jace', 'Jace Beleren', '{1}{U}{U}', 3, 'Legendary Planeswalker — Jace', '+2: Each player draws a card.\n-1: Target player draws a card.\n-10: Target player mills twenty cards.', null, null, 'm11', 'Magic 2011', 'mythic', '3');
+  insertColor.run('jace-1', 'U');
+  insertIdentity.run('jace-1', 'U');
+}

@@ -48,11 +48,23 @@ The project SHALL define a `Rarity` type as the union `'common' | 'uncommon' | '
 - **THEN** it is accepted by the type system
 
 ### Requirement: SearchField enum covers all keywords
-The project SHALL define a `SearchField` type covering: `color`, `colorIdentity`, `type`, `oracle`, `mana`, `manaValue`, `power`, `toughness`, `rarity`, `set`, `format`, `keyword`, `name`, `loyalty`, `banned`, `restricted`, and `powtou`.
+The project SHALL define a `SearchField` type covering: `color`, `colorIdentity`, `type`, `oracle`, `mana`, `manaValue`, `power`, `toughness`, `rarity`, `set`, `format`, `keyword`, `name`, `loyalty`, `banned`, `restricted`, `powtou`, `is`, `not`, and `has`.
 
 #### Scenario: All Scryfall keywords map to SearchField
-- **WHEN** any supported keyword prefix (c:, t:, o:, m:, mv, pow, tou, r:, s:, e:, f:, kw:, id:, name:, banned:, restricted:, loy, pt) is used
+- **WHEN** any supported keyword prefix (c:, t:, o:, m:, mv, pow, tou, r:, s:, e:, f:, kw:, id:, name:, banned:, restricted:, loy, pt, is:, not:, has:) is used
 - **THEN** it maps to a specific SearchField value
+
+#### Scenario: is keyword maps to SearchField
+- **WHEN** the keyword prefix `is:` is used
+- **THEN** it maps to SearchField value `is`
+
+#### Scenario: not keyword maps to SearchField
+- **WHEN** the keyword prefix `not:` is used
+- **THEN** it maps to SearchField value `not`
+
+#### Scenario: has keyword maps to SearchField
+- **WHEN** the keyword prefix `has:` is used
+- **THEN** it maps to SearchField value `has`
 
 ### Requirement: Parser AST types
 The project SHALL define AST node types: `AndNode`, `OrNode`, `NotNode`, `ComparisonNode`, `TextSearchNode`, and `ExactNameNode`. Each node SHALL have a `kind` discriminant field.
@@ -69,9 +81,3 @@ The project SHALL define AST node types: `AndNode`, `OrNode`, `NotNode`, `Compar
 - **WHEN** the query `!"Lightning Bolt"` is parsed
 - **THEN** it produces an `ExactNameNode` with `{ kind: "exactName", value: "Lightning Bolt" }`
 
-### Requirement: SearchField enum covers all keywords
-The project SHALL define a `SearchField` type covering: `color`, `colorIdentity`, `type`, `oracle`, `mana`, `manaValue`, `power`, `toughness`, `rarity`, `set`, `format`, `keyword`, and `name`.
-
-#### Scenario: All Scryfall keywords map to SearchField
-- **WHEN** any supported keyword prefix (c:, t:, o:, m:, mv, pow, tou, r:, s:, f:, kw:, id:) is used
-- **THEN** it maps to a specific SearchField value

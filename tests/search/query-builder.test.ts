@@ -189,6 +189,52 @@ describe('query-builder', () => {
     });
   });
 
+  describe('strixhaven college aliases', () => {
+    it('should handle silverquill color alias (WB)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'silverquill' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('card_colors');
+      expect(params).toContain('W');
+      expect(params).toContain('B');
+    });
+
+    it('should handle prismari color alias (UR)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'prismari' };
+      const { sql, params } = buildQuery(node);
+      expect(params).toContain('U');
+      expect(params).toContain('R');
+    });
+
+    it('should handle witherbloom color alias (BG)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'witherbloom' };
+      const { sql, params } = buildQuery(node);
+      expect(params).toContain('B');
+      expect(params).toContain('G');
+    });
+
+    it('should handle lorehold color alias (RW)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'lorehold' };
+      const { sql, params } = buildQuery(node);
+      expect(params).toContain('R');
+      expect(params).toContain('W');
+    });
+
+    it('should handle quandrix color alias (GU)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'quandrix' };
+      const { sql, params } = buildQuery(node);
+      expect(params).toContain('G');
+      expect(params).toContain('U');
+    });
+
+    it('should handle college alias with color identity subset', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'colorIdentity', operator: '<=', value: 'quandrix' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('card_color_identity');
+      expect(params).toContain('G');
+      expect(params).toContain('U');
+    });
+  });
+
   describe('multicolor queries', () => {
     it('should build SQL for c:multicolor', () => {
       const node: QueryNode = { kind: 'comparison', field: 'color', operator: ':', value: 'multicolor' };
@@ -203,6 +249,42 @@ describe('query-builder', () => {
       const { sql } = buildQuery(node);
       expect(sql).toContain('COUNT(*)');
       expect(sql).toContain('> 1');
+    });
+  });
+
+  describe('numeric color count', () => {
+    it('should build SQL for c=2 (exactly 2 colors)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: '=', value: '2' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('COUNT(*)');
+      expect(sql).toContain('card_colors');
+      expect(sql).toContain('= ?');
+      expect(params).toContain(2);
+    });
+
+    it('should build SQL for c>=3 (3 or more colors)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: '>=', value: '3' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('COUNT(*)');
+      expect(sql).toContain('>= ?');
+      expect(params).toContain(3);
+    });
+
+    it('should build SQL for c=0 (colorless by count)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'color', operator: '=', value: '0' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('COUNT(*)');
+      expect(sql).toContain('= ?');
+      expect(params).toContain(0);
+    });
+
+    it('should build SQL for id=2 (identity with 2 colors)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'colorIdentity', operator: '=', value: '2' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('COUNT(*)');
+      expect(sql).toContain('card_color_identity');
+      expect(sql).toContain('= ?');
+      expect(params).toContain(2);
     });
   });
 
@@ -244,6 +326,127 @@ describe('query-builder', () => {
       expect(sql).toContain('CAST(cards.power AS REAL)');
       expect(sql).toContain('CAST(cards.loyalty AS REAL)');
       expect(params).toHaveLength(0);
+    });
+  });
+
+  describe('is: conditions', () => {
+    it('should build SQL for is:spell', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'spell' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("type_line NOT LIKE '%Land%'");
+    });
+
+    it('should build SQL for is:permanent', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'permanent' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("type_line LIKE '%Creature%'");
+      expect(sql).toContain("type_line LIKE '%Land%'");
+      expect(sql).toContain("type_line LIKE '%Artifact%'");
+      expect(sql).toContain('OR');
+    });
+
+    it('should build SQL for is:historic', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'historic' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("type_line LIKE '%Legendary%'");
+      expect(sql).toContain("type_line LIKE '%Artifact%'");
+      expect(sql).toContain("type_line LIKE '%Saga%'");
+    });
+
+    it('should build SQL for is:vanilla', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'vanilla' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("type_line LIKE '%Creature%'");
+      expect(sql).toContain('oracle_text IS NULL');
+    });
+
+    it('should build SQL for is:modal', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'modal' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("oracle_text LIKE '%choose one%'");
+    });
+
+    it('should build SQL for is:bear', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'bear' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("type_line LIKE '%Creature%'");
+      expect(sql).toContain("power = '2'");
+      expect(sql).toContain("toughness = '2'");
+      expect(sql).toContain('cmc = 2');
+    });
+
+    it('should build SQL for is:hybrid', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'hybrid' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('mana_cost LIKE');
+      expect(sql).toContain('{_/_}');
+    });
+
+    it('should build SQL for is:phyrexian', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'phyrexian' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('mana_cost LIKE');
+      expect(sql).toContain('/P}');
+    });
+
+    it('should build SQL for is:party', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'party' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("type_line LIKE '%Creature%'");
+      expect(sql).toContain("type_line LIKE '%Cleric%'");
+      expect(sql).toContain("type_line LIKE '%Rogue%'");
+      expect(sql).toContain("type_line LIKE '%Warrior%'");
+      expect(sql).toContain("type_line LIKE '%Wizard%'");
+    });
+
+    it('should build SQL for is:outlaw', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'outlaw' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("type_line LIKE '%Creature%'");
+      expect(sql).toContain("type_line LIKE '%Assassin%'");
+      expect(sql).toContain("type_line LIKE '%Pirate%'");
+    });
+
+    it('should return 1=0 for unknown is: condition', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'nonexistent' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('1 = 0');
+    });
+  });
+
+  describe('not: conditions', () => {
+    it('should negate is:spell for not:spell', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'not', operator: ':', value: 'spell' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('NOT');
+      expect(sql).toContain("type_line NOT LIKE '%Land%'");
+    });
+
+    it('should return 1=1 for unknown not: condition', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'not', operator: ':', value: 'nonexistent' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('1 = 1');
+    });
+  });
+
+  describe('has: conditions', () => {
+    it('should build SQL for has:pt', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'has', operator: ':', value: 'pt' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('power IS NOT NULL');
+      expect(sql).toContain('toughness IS NOT NULL');
+    });
+
+    it('should build SQL for has:loyalty', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'has', operator: ':', value: 'loyalty' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('loyalty IS NOT NULL');
+    });
+
+    it('should return 1=0 for unknown has: condition', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'has', operator: ':', value: 'nonexistent' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('1 = 0');
     });
   });
 });

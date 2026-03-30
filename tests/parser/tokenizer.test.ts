@@ -311,4 +311,42 @@ describe('tokenizer', () => {
       ]);
     });
   });
+
+  describe('is/not/has keywords', () => {
+    it('should tokenize is:spell', () => {
+      const tokens = tokenize('is:spell');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'is', operator: ':', value: 'spell' },
+      ]);
+    });
+
+    it('should tokenize not:spell', () => {
+      const tokens = tokenize('not:spell');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'not', operator: ':', value: 'spell' },
+      ]);
+    });
+
+    it('should tokenize has:loyalty', () => {
+      const tokens = tokenize('has:loyalty');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'has', operator: ':', value: 'loyalty' },
+      ]);
+    });
+
+    it('should tokenize -not:spell with negation prefix', () => {
+      const tokens = tokenize('-not:spell');
+      expect(tokens).toEqual([
+        { kind: 'negate' },
+        { kind: 'keyword', field: 'not', operator: ':', value: 'spell' },
+      ]);
+    });
+
+    it('should tokenize is: with quoted value', () => {
+      const tokens = tokenize('is:"french vanilla"');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'is', operator: ':', value: 'french vanilla' },
+      ]);
+    });
+  });
 });

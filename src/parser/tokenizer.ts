@@ -24,6 +24,9 @@ const KEYWORD_MAP: Record<string, SearchField> = {
   'name': 'name',
   'banned': 'banned',
   'restricted': 'restricted',
+  'is': 'is',
+  'not': 'not',
+  'has': 'has',
 };
 
 const BARE_KEYWORD_MAP: Record<string, SearchField> = {
