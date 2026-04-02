@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../../src/db/migrations.js';
-import { searchCards, getCardByName } from '../../src/db/queries.js';
+import { searchCards, getCardByName, searchCardsByPrefix, searchCardsBySubstring } from '../../src/db/queries.js';
 
 function createTestDb(): Database.Database {
   const db = new Database(':memory:');
@@ -130,6 +130,74 @@ describe('queries', () => {
     it('should return empty array when no matches', () => {
       const cards = searchCards(db, 'WHERE cards.rarity = ?', ['mythic']);
       expect(cards).toHaveLength(0);
+    });
+  });
+
+  describe('searchCardsByPrefix', () => {
+    beforeEach(() => {
+      seedCard(db, { id: 'bolt-1', name: 'Lightning Bolt' });
+      seedCard(db, { id: 'helix-1', name: 'Lightning Helix', mana_cost: '{R}{W}', cmc: 2, colors: ['R', 'W'] });
+      seedCard(db, { id: 'strike-1', name: 'Lightning Strike', mana_cost: '{1}{R}', cmc: 2 });
+      seedCard(db, { id: 'serra-1', name: 'Serra Angel', mana_cost: '{3}{W}{W}', cmc: 5, type_line: 'Creature — Angel', colors: ['W'] });
+    });
+
+    it('should find cards by prefix', () => {
+      const cards = searchCardsByPrefix(db, 'Lightning');
+      expect(cards).toHaveLength(3);
+      expect(cards.map((c) => c.name)).toEqual(['Lightning Bolt', 'Lightning Helix', 'Lightning Strike']);
+    });
+
+    it('should return empty array when no cards match prefix', () => {
+      const cards = searchCardsByPrefix(db, 'Zzzzz');
+      expect(cards).toHaveLength(0);
+    });
+
+    it('should be case-insensitive', () => {
+      const cards = searchCardsByPrefix(db, 'lightning');
+      expect(cards).toHaveLength(3);
+    });
+
+    it('should limit results to 10', () => {
+      for (let i = 0; i < 12; i++) {
+        seedCard(db, { id: `dragon-${i}`, name: `Dragon ${String(i).padStart(2, '0')}` });
+      }
+      const cards = searchCardsByPrefix(db, 'Dragon');
+      expect(cards).toHaveLength(10);
+    });
+  });
+
+  describe('searchCardsBySubstring', () => {
+    beforeEach(() => {
+      seedCard(db, { id: 'bolt-1', name: 'Lightning Bolt' });
+      seedCard(db, { id: 'helix-1', name: 'Lightning Helix', mana_cost: '{R}{W}', cmc: 2, colors: ['R', 'W'] });
+      seedCard(db, { id: 'serra-1', name: 'Serra Angel', mana_cost: '{3}{W}{W}', cmc: 5, type_line: 'Creature — Angel', colors: ['W'] });
+    });
+
+    it('should find cards containing substring', () => {
+      const result = searchCardsBySubstring(db, 'Bolt');
+      expect(result.cards).toHaveLength(1);
+      expect(result.cards[0].name).toBe('Lightning Bolt');
+      expect(result.totalCount).toBe(1);
+    });
+
+    it('should return empty result when no cards match', () => {
+      const result = searchCardsBySubstring(db, 'Zzzzz');
+      expect(result.cards).toHaveLength(0);
+      expect(result.totalCount).toBe(0);
+    });
+
+    it('should be case-insensitive', () => {
+      const result = searchCardsBySubstring(db, 'bolt');
+      expect(result.cards).toHaveLength(1);
+    });
+
+    it('should return total count when results exceed limit', () => {
+      for (let i = 0; i < 12; i++) {
+        seedCard(db, { id: `angel-${i}`, name: `Angel of ${String(i).padStart(2, '0')}`, colors: ['W'] });
+      }
+      const result = searchCardsBySubstring(db, 'Angel');
+      expect(result.cards).toHaveLength(10);
+      expect(result.totalCount).toBe(13); // Serra Angel + 12 seeded
     });
   });
 });

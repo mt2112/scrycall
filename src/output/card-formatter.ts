@@ -48,6 +48,23 @@ export function formatCardList(cards: readonly Card[]): string {
   return lines.join('\n');
 }
 
+export function formatNumberedCardList(
+  cards: readonly Card[],
+  totalCount: number,
+): string {
+  const lines = cards.map((card, i) => {
+    const mana = card.manaCost ? ` ${card.manaCost}` : '';
+    return `  ${i + 1}. ${card.name}${mana} — ${card.typeLine}`;
+  });
+
+  if (totalCount > cards.length) {
+    lines.push('');
+    lines.push(`  ...and ${totalCount - cards.length} more.`);
+  }
+
+  return lines.join('\n');
+}
+
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

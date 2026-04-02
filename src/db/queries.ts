@@ -88,3 +88,41 @@ export function getCardByName(db: Database.Database, name: string): Card | undef
   if (!row) return undefined;
   return mapRowToCard(db, row);
 }
+
+const FUZZY_MATCH_LIMIT = 10;
+
+export function searchCardsByPrefix(db: Database.Database, prefix: string): Card[] {
+  const pattern = prefix.replace(/[%_]/g, '\\$&') + '%';
+  const rows = db
+    .prepare(
+      `SELECT * FROM cards WHERE name LIKE ? ESCAPE '\\' COLLATE NOCASE ORDER BY name COLLATE NOCASE LIMIT ?`,
+    )
+    .all(pattern, FUZZY_MATCH_LIMIT) as CardRow[];
+  return rows.map((row) => mapRowToCard(db, row));
+}
+
+export interface SubstringSearchResult {
+  readonly cards: Card[];
+  readonly totalCount: number;
+}
+
+export function searchCardsBySubstring(
+  db: Database.Database,
+  substring: string,
+): SubstringSearchResult {
+  const pattern = '%' + substring.replace(/[%_]/g, '\\$&') + '%';
+  const countRow = db
+    .prepare(
+      `SELECT COUNT(*) as cnt FROM cards WHERE name LIKE ? ESCAPE '\\' COLLATE NOCASE`,
+    )
+    .get(pattern) as { cnt: number };
+  const rows = db
+    .prepare(
+      `SELECT * FROM cards WHERE name LIKE ? ESCAPE '\\' COLLATE NOCASE ORDER BY name COLLATE NOCASE LIMIT ?`,
+    )
+    .all(pattern, FUZZY_MATCH_LIMIT) as CardRow[];
+  return {
+    cards: rows.map((row) => mapRowToCard(db, row)),
+    totalCount: countRow.cnt,
+  };
+}
