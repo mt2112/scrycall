@@ -12,3 +12,8 @@ export function printCardDetail(card: Card): void {
 export function printNumberedCardList(cards: readonly Card[], totalCount: number): void {
   console.log(formatNumberedCardList(cards, totalCount));
 }
+
+export function printNumberedSearchResults(cards: readonly Card[]): void {
+  console.log(formatNumberedCardList(cards, cards.length));
+  console.log(`\n${cards.length} card${cards.length === 1 ? '' : 's'} found.`);
+}

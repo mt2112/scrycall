@@ -142,4 +142,14 @@ describe('CLI search command', () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain('Card not found');
   });
+
+  it('search piped (non-TTY) — outputs plain list without numbers or prompt', () => {
+    const { stdout, exitCode } = runCli(['search', 'c:red']);
+    expect(exitCode).toBe(0);
+    // Non-TTY should use plain list format (no numbered indices)
+    expect(stdout).not.toMatch(/^\s*\d+\.\s/m);
+    expect(stdout).not.toContain('Enter card number');
+    expect(stdout).toContain('Lightning Bolt');
+    expect(stdout).toContain('2 cards found.');
+  });
 });
