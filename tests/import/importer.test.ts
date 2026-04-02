@@ -127,4 +127,28 @@ describe('importer', () => {
 
     db.close();
   });
+
+  it('should invoke onProgress callback with write and index phases', async () => {
+    const db = createTestDb();
+    const phases: string[] = [];
+    const onProgress = (event: { phase: string }) => {
+      phases.push(event.phase);
+    };
+
+    const result = await importCards(db, createFixtureStream(), onProgress);
+    expect(result.ok).toBe(true);
+    expect(phases).toEqual(['write', 'index']);
+
+    db.close();
+  });
+
+  it('should work without onProgress callback', async () => {
+    const db = createTestDb();
+    const result = await importCards(db, createFixtureStream());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.cardCount).toBe(2);
+
+    db.close();
+  });
 });

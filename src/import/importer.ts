@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { Readable } from 'node:stream';
 import type { Result } from '../utils/result.js';
 import type { ImportError } from '../models/errors.js';
+import type { ImportProgressCallback } from '../models/index.js';
 import { ok, err } from '../utils/result.js';
 import pkg from 'stream-json';
 const { parser } = pkg;
@@ -38,6 +39,7 @@ interface ScryfallCard {
 export async function importCards(
   db: Database.Database,
   inputStream: Readable,
+  onProgress?: ImportProgressCallback,
 ): Promise<Result<ImportStats, ImportError>> {
   const startTime = Date.now();
   let cardCount = 0;
@@ -85,6 +87,7 @@ export async function importCards(
 
   try {
     // Clear existing data and insert all within a single transaction
+    onProgress?.({ phase: 'write' });
     const importTransaction = db.transaction(() => {
       db.exec('DELETE FROM card_legalities');
       db.exec('DELETE FROM card_keywords');
@@ -137,6 +140,7 @@ export async function importCards(
       }
 
       // Rebuild FTS5 index
+      onProgress?.({ phase: 'index' });
       db.exec("INSERT INTO cards_fts(cards_fts) VALUES('rebuild')");
     });
 
