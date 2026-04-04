@@ -34,6 +34,7 @@ interface ScryfallCard {
   rarity: string;
   loyalty?: string;
   legalities?: Record<string, string>;
+  scryfall_uri?: string;
 }
 
 export async function importCards(
@@ -45,8 +46,8 @@ export async function importCards(
   let cardCount = 0;
 
   const insertCard = db.prepare(
-    `INSERT OR REPLACE INTO cards (id, oracle_id, name, mana_cost, cmc, type_line, oracle_text, power, toughness, set_code, set_name, rarity, loyalty)
-     VALUES (@id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text, @power, @toughness, @set_code, @set_name, @rarity, @loyalty)`,
+    `INSERT OR REPLACE INTO cards (id, oracle_id, name, mana_cost, cmc, type_line, oracle_text, power, toughness, set_code, set_name, rarity, loyalty, scryfall_uri)
+     VALUES (@id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text, @power, @toughness, @set_code, @set_name, @rarity, @loyalty, @scryfall_uri)`,
   );
   const insertColor = db.prepare(
     'INSERT OR IGNORE INTO card_colors (card_id, color) VALUES (?, ?)',
@@ -110,6 +111,7 @@ export async function importCards(
           set_name: card.set_name,
           rarity: card.rarity,
           loyalty: card.loyalty ?? null,
+          scryfall_uri: card.scryfall_uri ?? null,
         });
 
         if (card.colors) {

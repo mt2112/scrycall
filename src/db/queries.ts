@@ -15,6 +15,7 @@ interface CardRow {
   set_name: string;
   rarity: string;
   loyalty: string | null;
+  scryfall_uri: string | null;
 }
 
 function getCardColors(db: Database.Database, cardId: string): readonly Color[] {
@@ -68,6 +69,7 @@ function mapRowToCard(db: Database.Database, row: CardRow): Card {
     rarity: row.rarity as Rarity,
     legalities: getCardLegalities(db, row.id),
     loyalty: row.loyalty,
+    scryfallUri: row.scryfall_uri,
   };
 }
 

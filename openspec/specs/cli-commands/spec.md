@@ -23,7 +23,7 @@ The `import` command SHALL download oracle_cards from the Scryfall Bulk Data API
 - **THEN** the last phase message is visible and an error message is displayed
 
 ### Requirement: Search command parses and executes queries
-The `search` command SHALL accept a query string argument, parse it using the query parser, execute it against the database, and display matching cards. When stdout is a TTY, the command SHALL display results with numbered indices and enter an interactive prompt loop allowing the user to select a card by number to see its detail. When stdout is not a TTY, the command SHALL display results in the existing plain-text format without numbers or prompts. The search command's action handler SHALL be async to support the interactive readline loop.
+The `search` command SHALL accept a query string argument, parse it using the query parser, execute it against the database, and display matching cards. When stdout is a TTY, the command SHALL display results with numbered indices and enter an interactive prompt loop allowing the user to select a card by number to see its detail. When stdout is not a TTY, the command SHALL display results in the existing plain-text format without numbers or prompts. The search command's action handler SHALL be async to support the interactive readline loop. The command SHALL accept an `--open` flag.
 
 #### Scenario: Successful search
 - **WHEN** `scrycall search "c:red t:creature pow>=4"` is run
@@ -45,8 +45,16 @@ The `search` command SHALL accept a query string argument, parse it using the qu
 - **WHEN** `scrycall search "c:red" | cat` is run (stdout piped)
 - **THEN** results are displayed in plain-text format with no numbers or prompt
 
+#### Scenario: Open flag opens Scryfall search grid
+- **WHEN** `scrycall search "c:red pow>=4" --open` is run
+- **THEN** local results are displayed as normal AND the Scryfall search page opens in the browser at `https://scryfall.com/search?q=c%3Ared+pow%3E%3D4&unique=cards&as=grid`
+
+#### Scenario: Open flag with no results still opens Scryfall
+- **WHEN** `scrycall search "t:xyzzy" --open` is run and no local results match
+- **THEN** the no-results message is shown AND the Scryfall search page still opens (Scryfall may have different results)
+
 ### Requirement: Card command displays detailed card info
-The `card` command SHALL accept a card name and display detailed information for that card. When no exact match is found, the command SHALL fall back to a prefix search, then a substring search. If exactly one card matches, the command SHALL display its full detail automatically. If multiple cards match, the command SHALL display a numbered suggestion list. If no cards match at all, the command SHALL display "Card not found".
+The `card` command SHALL accept a card name and display detailed information for that card. When no exact match is found, the command SHALL fall back to a prefix search, then a substring search. If exactly one card matches, the command SHALL display its full detail automatically. If multiple cards match, the command SHALL display a numbered suggestion list. If no cards match at all, the command SHALL display "Card not found". The command SHALL accept an `--open` flag.
 
 #### Scenario: Exact name match
 - **WHEN** `scrycall card "Lightning Bolt"` is run
@@ -67,3 +75,15 @@ The `card` command SHALL accept a card name and display detailed information for
 #### Scenario: No match at all
 - **WHEN** `scrycall card "Xyzzyplugh"` is run and no cards match
 - **THEN** an error message indicates the card was not found
+
+#### Scenario: Open flag with exact match
+- **WHEN** `scrycall card "Lightning Bolt" --open` is run and the card has a `scryfallUri`
+- **THEN** the card detail is displayed AND the Scryfall page is opened in the default browser
+
+#### Scenario: Open flag with no scryfall_uri
+- **WHEN** `scrycall card "Lightning Bolt" --open` is run and the card has no `scryfallUri`
+- **THEN** the card detail is displayed and a message suggests re-importing to enable `--open`
+
+#### Scenario: Open flag with multiple matches
+- **WHEN** `scrycall card "Lightning" --open` is run and multiple cards match
+- **THEN** the numbered suggestion list is displayed without opening a browser (user must specify the exact card)

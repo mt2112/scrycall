@@ -21,6 +21,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     rarity: 'common',
     legalities: {},
     loyalty: null,
+    scryfallUri: null,
     ...overrides,
   };
 }

@@ -24,4 +24,5 @@ export interface Card {
   readonly rarity: Rarity;
   readonly legalities: FormatLegality;
   readonly loyalty: string | null;
+  readonly scryfallUri: string | null;
 }

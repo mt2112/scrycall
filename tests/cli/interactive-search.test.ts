@@ -22,6 +22,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     rarity: 'common',
     legalities: {},
     loyalty: null,
+    scryfallUri: null,
     ...overrides,
   };
 }
@@ -110,5 +111,40 @@ describe('promptForSelection', () => {
     expect(onSelect).toHaveBeenCalledTimes(2);
     expect(onSelect).toHaveBeenCalledWith(cards[0]);
     expect(onSelect).toHaveBeenCalledWith(cards[2]);
+  });
+
+  it('calls onOpen with the correct card for o{N} input', async () => {
+    fakeStdin(['o2', 'q']);
+    vi.spyOn(process, 'stderr', 'get').mockReturnValue({ write: vi.fn() } as unknown as typeof process.stderr);
+    const onSelect = vi.fn();
+    const onOpen = vi.fn();
+
+    await promptForSelection(cards, onSelect, onOpen);
+
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledWith(cards[1]);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('shows error for out-of-range o{N} and continues', async () => {
+    fakeStdin(['o0', 'o99', 'q']);
+    vi.spyOn(process, 'stderr', 'get').mockReturnValue({ write: vi.fn() } as unknown as typeof process.stderr);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onOpen = vi.fn();
+
+    await promptForSelection(cards, vi.fn(), onOpen);
+
+    expect(errorSpy).toHaveBeenCalledWith('Invalid selection. Enter 1-3 or q to quit.');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('does not crash when onOpen is not provided', async () => {
+    fakeStdin(['o1', 'q']);
+    vi.spyOn(process, 'stderr', 'get').mockReturnValue({ write: vi.fn() } as unknown as typeof process.stderr);
+    const onSelect = vi.fn();
+
+    await promptForSelection(cards, onSelect);
+
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

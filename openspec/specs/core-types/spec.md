@@ -23,11 +23,15 @@ The project SHALL define `ParseError`, `ImportError`, and `DbError` types, each 
 - **THEN** the error has `{ kind: "import", message: "...", cause: Error }` where cause is the underlying error
 
 ### Requirement: Card interface covers all Scryfall fields
-The project SHALL define a `Card` interface with fields: `id`, `oracleId`, `name`, `manaCost`, `cmc`, `typeLine`, `oracleText`, `power`, `toughness`, `colors`, `colorIdentity`, `keywords`, `set`, `setName`, `rarity`, `legalities`, and `loyalty`.
+The project SHALL define a `Card` interface with fields: `id`, `oracleId`, `name`, `manaCost`, `cmc`, `typeLine`, `oracleText`, `power`, `toughness`, `colors`, `colorIdentity`, `keywords`, `set`, `setName`, `rarity`, `legalities`, `loyalty`, and `scryfallUri`.
 
 #### Scenario: Card interface is complete
 - **WHEN** a Scryfall card object is mapped to a Card
-- **THEN** all 17 fields are populated with correctly typed values
+- **THEN** all 18 fields are populated with correctly typed values
+
+#### Scenario: scryfallUri is a string or null
+- **WHEN** a Card is constructed
+- **THEN** the `scryfallUri` field is `string | null`, containing the Scryfall permalink URL or null if unavailable
 
 ### Requirement: Color type restricts to WUBRG
 The project SHALL define a `Color` type as the union `'W' | 'U' | 'B' | 'R' | 'G'`.
