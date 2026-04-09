@@ -5,6 +5,7 @@ const KEYWORD_MAP: Record<string, SearchField> = {
   'color': 'color',
   'id': 'colorIdentity',
   'identity': 'colorIdentity',
+  'commander': 'commander',
   't': 'type',
   'type': 'type',
   'o': 'oracle',

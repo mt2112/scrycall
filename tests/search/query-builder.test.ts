@@ -63,6 +63,15 @@ describe('query-builder', () => {
       expect(sql).toContain('keyword = ?');
       expect(params).toContain('flying');
     });
+
+    it('should build SQL for commander query as color identity subset', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'commander', operator: ':', value: 'RG' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('card_color_identity');
+      expect(sql).toContain('NOT IN');
+      expect(params).toContain('R');
+      expect(params).toContain('G');
+    });
   });
 
   describe('text search', () => {

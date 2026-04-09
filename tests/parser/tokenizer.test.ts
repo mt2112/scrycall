@@ -66,6 +66,13 @@ describe('tokenizer', () => {
       ]);
     });
 
+    it('should tokenize commander:RG', () => {
+      const tokens = tokenize('commander:RG');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'commander', operator: ':', value: 'RG' },
+      ]);
+    });
+
     it('should tokenize m:{W}{U}', () => {
       const tokens = tokenize('m:{W}{U}');
       expect(tokens).toEqual([

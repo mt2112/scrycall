@@ -597,6 +597,8 @@ function buildComparisonSql(
       return buildColorQuery('color', operator, value);
     case 'colorIdentity':
       return buildColorQuery('identity', operator, value);
+    case 'commander':
+      return buildColorQuery('identity', '<=', value);
     case 'type':
       return buildTypeQuery(operator, value);
     case 'oracle':

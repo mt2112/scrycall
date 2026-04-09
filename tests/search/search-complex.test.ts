@@ -130,6 +130,28 @@ function seedCards(db: Database.Database): void {
   insertKeyword.run('guide-1', 'Haste');
   insertLegality.run('guide-1', 'modern', 'legal');
   insertLegality.run('guide-1', 'legacy', 'legal');
+
+  // 13. Smuggler's Copter — colorless Vehicle artifact
+  insertCard.run('copter-1', 'oracle-copter', "Smuggler's Copter", '{2}', 2, 'Artifact — Vehicle', 'Flying\nWhenever Smuggler\'s Copter attacks or blocks, you may draw a card. If you do, discard a card.\nCrew 1', '3', '3', 'kld', 'Kaladesh', 'rare', null);
+  insertKeyword.run('copter-1', 'Flying');
+  insertKeyword.run('copter-1', 'Crew');
+  insertLegality.run('copter-1', 'modern', 'legal');
+  insertLegality.run('copter-1', 'legacy', 'legal');
+
+  // 14. Greasefang, Okiba Boss — WB Vehicle-related creature (not a Vehicle itself)
+  insertCard.run('greasefang-1', 'oracle-greasefang', 'Greasefang, Okiba Boss', '{1}{W}{B}', 3, 'Legendary Creature — Rat Pilot', 'At the beginning of combat on your turn, return target Vehicle card from your graveyard to the battlefield. It gains haste. Return it to its owner\'s hand at the beginning of your next end step.', '4', '3', 'neo', 'Kamigawa: Neon Dynasty', 'rare', null);
+  insertColor.run('greasefang-1', 'W');
+  insertColor.run('greasefang-1', 'B');
+  insertIdentity.run('greasefang-1', 'W');
+  insertIdentity.run('greasefang-1', 'B');
+  insertLegality.run('greasefang-1', 'modern', 'legal');
+  insertLegality.run('greasefang-1', 'legacy', 'legal');
+
+  // 15. Reckoner Bankbuster — colorless Vehicle artifact
+  insertCard.run('bankbuster-1', 'oracle-bankbuster', 'Reckoner Bankbuster', '{2}', 2, 'Artifact — Vehicle', '{2}, {T}, Remove a charge counter from Reckoner Bankbuster: Draw a card.\nCrew 3', '4', '4', 'neo', 'Kamigawa: Neon Dynasty', 'rare', null);
+  insertKeyword.run('bankbuster-1', 'Crew');
+  insertLegality.run('bankbuster-1', 'modern', 'legal');
+  insertLegality.run('bankbuster-1', 'legacy', 'legal');
 }
 
 /** Helper: extract sorted card names from a successful search result */
@@ -182,11 +204,13 @@ describe('complex search integration', () => {
     });
 
     it('c<=ub — colors are subset of UB (colorless or only U/B)', () => {
-      // Jace is mono-U (subset of UB). Dimir Signet and Karn have no colors.
+      // Jace is mono-U (subset of UB). Dimir Signet, Karn, Copter, Bankbuster have no colors.
       expect(searchNames(db, 'c<=ub')).toEqual([
         'Dimir Signet',
         'Jace, the Mind Sculptor',
         'Karn Liberated',
+        'Reckoner Bankbuster',
+        "Smuggler's Copter",
       ]);
     });
 
@@ -194,6 +218,8 @@ describe('complex search integration', () => {
       expect(searchNames(db, 'c:colorless')).toEqual([
         'Dimir Signet',
         'Karn Liberated',
+        'Reckoner Bankbuster',
+        "Smuggler's Copter",
       ]);
     });
 
@@ -223,9 +249,10 @@ describe('complex search integration', () => {
     });
 
     it('t:creature pow>=4 — creatures with power >= 4', () => {
-      // Serra Angel (4), Bolas (7), Atraxa (4), Omnath (4). Tarmogoyf excluded (* power).
+      // Serra Angel (4), Bolas (7), Atraxa (4), Omnath (4), Greasefang (4). Tarmogoyf excluded (* power).
       expect(searchNames(db, 't:creature pow>=4')).toEqual([
         "Atraxa, Praetors' Voice",
+        'Greasefang, Okiba Boss',
         'Nicol Bolas',
         'Omnath, Locus of Creation',
         'Serra Angel',
@@ -311,32 +338,36 @@ describe('complex search integration', () => {
 
   describe('negation', () => {
     it('t:creature -c:red — non-red creatures', () => {
-      // Creatures: Serra, Bolas, Tarmogoyf, Atraxa, Omnath
+      // Creatures: Serra, Bolas, Tarmogoyf, Atraxa, Omnath, Greasefang
       // Remove those with red: Bolas (R), Omnath (R)
       expect(searchNames(db, 't:creature -c:red')).toEqual([
         "Atraxa, Praetors' Voice",
+        'Greasefang, Okiba Boss',
         'Serra Angel',
         'Tarmogoyf',
       ]);
     });
 
     it('-kw:flying t:creature — creatures without flying', () => {
-      // Creatures: Serra (Flying), Bolas (Flying), Tarmogoyf, Atraxa (Flying), Omnath, Goblin Guide (Haste)
+      // Creatures: Serra (Flying), Bolas (Flying), Tarmogoyf, Atraxa (Flying), Omnath, Goblin Guide (Haste), Greasefang
       expect(searchNames(db, '-kw:flying t:creature')).toEqual([
         'Goblin Guide',
+        'Greasefang, Okiba Boss',
         'Omnath, Locus of Creation',
         'Tarmogoyf',
       ]);
     });
 
     it('f:modern -t:creature — modern-legal non-creatures', () => {
-      // Modern-legal: Bolt, Serra, Tarmogoyf, Atraxa, Omnath, Shock, Wrath, Dimir, Karn
-      // Remove creatures: Serra, Tarmogoyf, Atraxa, Omnath
+      // Modern-legal: Bolt, Serra, Tarmogoyf, Atraxa, Omnath, Shock, Wrath, Dimir, Karn, Copter, Greasefang, Bankbuster
+      // Remove creatures: Serra, Tarmogoyf, Atraxa, Omnath, Greasefang
       expect(searchNames(db, 'f:modern -t:creature')).toEqual([
         'Dimir Signet',
         'Karn Liberated',
         'Lightning Bolt',
+        'Reckoner Bankbuster',
         'Shock',
+        "Smuggler's Copter",
         'Wrath of God',
       ]);
     });
@@ -352,7 +383,9 @@ describe('complex search integration', () => {
         'Dimir Signet',
         'Goblin Guide',
         'Lightning Bolt',
+        'Reckoner Bankbuster',
         'Shock',
+        "Smuggler's Copter",
         'Tarmogoyf',
       ]);
     });
@@ -370,10 +403,13 @@ describe('complex search integration', () => {
       expect(searchNames(db, 'r>=rare')).toEqual([
         "Atraxa, Praetors' Voice",
         'Goblin Guide',
+        'Greasefang, Okiba Boss',
         'Jace, the Mind Sculptor',
         'Karn Liberated',
         'Nicol Bolas',
         'Omnath, Locus of Creation',
+        'Reckoner Bankbuster',
+        "Smuggler's Copter",
         'Tarmogoyf',
         'Wrath of God',
       ]);
@@ -383,10 +419,13 @@ describe('complex search integration', () => {
       expect(searchNames(db, 'r>uncommon')).toEqual([
         "Atraxa, Praetors' Voice",
         'Goblin Guide',
+        'Greasefang, Okiba Boss',
         'Jace, the Mind Sculptor',
         'Karn Liberated',
         'Nicol Bolas',
         'Omnath, Locus of Creation',
+        'Reckoner Bankbuster',
+        "Smuggler's Copter",
         'Tarmogoyf',
         'Wrath of God',
       ]);
@@ -410,6 +449,8 @@ describe('complex search integration', () => {
       expect(searchNames(db, 'c=colorless')).toEqual([
         'Dimir Signet',
         'Karn Liberated',
+        'Reckoner Bankbuster',
+        "Smuggler's Copter",
       ]);
     });
 
@@ -503,10 +544,11 @@ describe('complex search integration', () => {
       expect(searchNames(db, 'pt>=14')).toEqual(['Nicol Bolas']);
     });
 
-    it('pt=8 — finds Serra Angel, Atraxa, Omnath (4+4=8)', () => {
+    it('pt=8 — finds Serra Angel, Atraxa, Omnath, Bankbuster (4+4=8)', () => {
       expect(searchNames(db, 'pt=8')).toEqual([
         "Atraxa, Praetors' Voice",
         'Omnath, Locus of Creation',
+        'Reckoner Bankbuster',
         'Serra Angel',
       ]);
     });
@@ -565,6 +607,42 @@ describe('complex search integration', () => {
       const names = searchNames(db, 'pow>=tou');
       expect(names).toContain('Serra Angel');
       expect(names).toContain('Nicol Bolas');
+    });
+  });
+
+  describe('commander identity queries', () => {
+    it('commander:RG — cards with identity subset of {R, G} including colorless', () => {
+      const names = searchNames(db, 'commander:RG');
+      // Mono-R: Lightning Bolt, Shock, Goblin Guide
+      // Mono-G: Tarmogoyf
+      // Colorless (no identity): Karn Liberated, Smuggler's Copter, Reckoner Bankbuster
+      expect(names).toContain('Lightning Bolt');
+      expect(names).toContain('Shock');
+      expect(names).toContain('Goblin Guide');
+      expect(names).toContain('Tarmogoyf');
+      expect(names).toContain('Karn Liberated');
+      expect(names).toContain("Smuggler's Copter");
+      expect(names).toContain('Reckoner Bankbuster');
+      // Should NOT include cards with identity outside {R, G}
+      expect(names).not.toContain('Serra Angel');
+      expect(names).not.toContain('Nicol Bolas');
+      expect(names).not.toContain('Dimir Signet');
+    });
+
+    it('t:vehicle commander:RG — colorless and red/green Vehicles', () => {
+      expect(searchNames(db, 't:vehicle commander:RG')).toEqual([
+        'Reckoner Bankbuster',
+        "Smuggler's Copter",
+      ]);
+    });
+
+    it('commander:gruul — works with color alias', () => {
+      const names = searchNames(db, 'commander:gruul');
+      expect(names).toContain('Lightning Bolt');
+      expect(names).toContain('Tarmogoyf');
+      expect(names).toContain('Karn Liberated');
+      expect(names).not.toContain('Serra Angel');
+      expect(names).not.toContain('Nicol Bolas');
     });
   });
 });

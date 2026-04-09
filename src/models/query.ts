@@ -16,6 +16,7 @@ export type SearchField =
   | 'banned'
   | 'restricted'
   | 'powtou'
+  | 'commander'
   | 'is'
   | 'not'
   | 'has';
