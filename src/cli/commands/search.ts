@@ -77,6 +77,13 @@ export function makeSearchCommand(): Command {
           return;
         }
 
+        if (options.open) {
+          const scryfallUrl = `https://scryfall.com/search?q=${encodeURIComponent(query)}&unique=cards&as=grid`;
+          openInBrowser(scryfallUrl);
+          console.error('Opened Scryfall search in browser.');
+          return;
+        }
+
         if (process.stdout.isTTY && result.data.length > 0) {
           printNumberedSearchResults(result.data);
           await promptForSelection(
@@ -99,11 +106,6 @@ export function makeSearchCommand(): Command {
           );
         } else {
           printSearchResults(result.data);
-        }
-
-        if (options.open) {
-          const scryfallUrl = `https://scryfall.com/search?q=${encodeURIComponent(query)}&unique=cards&as=grid`;
-          openInBrowser(scryfallUrl);
         }
       } finally {
         db.close();
