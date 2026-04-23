@@ -63,7 +63,8 @@ export function makeSearchCommand(): Command {
     .argument('<query>', 'Search query (e.g., "c:red t:creature pow>=4")')
     .option('--db <path>', 'Path to database file')
     .option('--open', 'Open search results on Scryfall in your browser')
-    .action(async (query: string, options: { db?: string; open?: boolean }) => {
+    .option('-i, --interactive', 'Show numbered results with interactive selection prompt')
+    .action(async (query: string, options: { db?: string; open?: boolean; interactive?: boolean }) => {
       const db = openDatabase(options.db);
       try {
         const result = search(db, query);
@@ -84,7 +85,7 @@ export function makeSearchCommand(): Command {
           return;
         }
 
-        if (process.stdout.isTTY && result.data.length > 0) {
+        if (options.interactive && process.stdout.isTTY && result.data.length > 0) {
           printNumberedSearchResults(result.data);
           await promptForSelection(
             result.data,

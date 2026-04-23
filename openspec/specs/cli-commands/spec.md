@@ -23,11 +23,11 @@ The `import` command SHALL download oracle_cards from the Scryfall Bulk Data API
 - **THEN** the last phase message is visible and an error message is displayed
 
 ### Requirement: Search command parses and executes queries
-The `search` command SHALL accept a query string argument, parse it using the query parser, execute it against the database, and display matching cards. When the `--open` flag is provided and the query succeeds, the command SHALL open the Scryfall search page in the browser immediately, print a confirmation message to stderr, and exit without displaying results to the console or entering the interactive prompt. When `--open` is not provided and stdout is a TTY, the command SHALL display results with numbered indices and enter an interactive prompt loop allowing the user to select a card by number to see its detail. When stdout is not a TTY and `--open` is not provided, the command SHALL display results in the existing plain-text format without numbers or prompts. The search command's action handler SHALL be async to support the interactive readline loop. The command SHALL accept an `--open` flag.
+The `search` command SHALL accept a query string argument, parse it using the query parser, execute it against the database, and display matching cards. When the `--open` flag is provided and the query succeeds, the command SHALL open the Scryfall search page in the browser immediately, print a confirmation message to stderr, and exit without displaying results to the console or entering the interactive prompt. When the `--interactive` / `-i` flag is provided and stdout is a TTY, the command SHALL display results with numbered indices and enter an interactive prompt loop allowing the user to select a card by number to see its detail. When `--interactive` is provided but stdout is not a TTY, the flag SHALL be silently ignored. When neither `--open` nor `--interactive` is provided, the command SHALL display results in plain-text format without numbers or prompts regardless of TTY status. The search command's action handler SHALL be async to support the interactive readline loop. The command SHALL accept `--open`, `--interactive` / `-i` flags.
 
 #### Scenario: Successful search
 - **WHEN** `scrycall search "c:red t:creature pow>=4"` is run
-- **THEN** matching cards are displayed in list format with a count summary
+- **THEN** matching cards are displayed in plain-text list format with a count summary
 
 #### Scenario: Parse error display
 - **WHEN** `scrycall search "(unclosed"` is run
@@ -37,13 +37,21 @@ The `search` command SHALL accept a query string argument, parse it using the qu
 - **WHEN** the query matches no cards
 - **THEN** a message indicates no cards were found
 
-#### Scenario: Interactive search in TTY
-- **WHEN** `scrycall search "c:red"` is run in a TTY terminal with results
+#### Scenario: Interactive search with -i flag in TTY
+- **WHEN** `scrycall search "c:red" -i` is run in a TTY terminal with results
 - **THEN** results are displayed with numbered indices and a selection prompt appears
+
+#### Scenario: Default search in TTY shows plain list
+- **WHEN** `scrycall search "c:red"` is run in a TTY terminal without `-i`
+- **THEN** results are displayed in plain-text format with no numbers or prompt
 
 #### Scenario: Non-interactive search when piped
 - **WHEN** `scrycall search "c:red" | cat` is run (stdout piped)
 - **THEN** results are displayed in plain-text format with no numbers or prompt
+
+#### Scenario: Interactive flag ignored when piped
+- **WHEN** `scrycall search "c:red" -i | cat` is run (stdout piped)
+- **THEN** results are displayed in plain-text format with no numbers or prompt; the `-i` flag is silently ignored
 
 #### Scenario: Open flag opens Scryfall immediately
 - **WHEN** `scrycall search "c:red pow>=4" --open` is run
@@ -56,6 +64,10 @@ The `search` command SHALL accept a query string argument, parse it using the qu
 #### Scenario: Open flag with parse error does not open browser
 - **WHEN** `scrycall search "(unclosed" --open` is run
 - **THEN** the parse error is displayed to stderr and the browser is NOT opened
+
+#### Scenario: Open flag takes precedence over interactive
+- **WHEN** `scrycall search "c:red" --open -i` is run
+- **THEN** the browser opens with Scryfall search. The `-i` flag is ignored and no interactive prompt is shown.
 
 ### Requirement: Card command displays detailed card info
 The `card` command SHALL accept a card name and display detailed information for that card. When no exact match is found, the command SHALL fall back to a prefix search, then a substring search. If exactly one card matches, the command SHALL display its full detail automatically. If multiple cards match, the command SHALL display a numbered suggestion list. If no cards match at all, the command SHALL display "Card not found". The command SHALL accept an `--open` flag.

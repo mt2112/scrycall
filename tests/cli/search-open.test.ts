@@ -70,4 +70,13 @@ describe('CLI search --open', () => {
     expect(stderr).not.toContain('Opened Scryfall search in browser.');
     expect(stdout).toBe('');
   });
+
+  it('--open takes precedence over -i', () => {
+    const { stdout, stderr, exitCode } = runCli(['search', 'c:red', '--open', '-i']);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe('');
+    expect(stderr).toContain('Opened Scryfall search in browser.');
+    // No interactive prompt or numbered output
+    expect(stdout).not.toContain('Enter card number');
+  });
 });

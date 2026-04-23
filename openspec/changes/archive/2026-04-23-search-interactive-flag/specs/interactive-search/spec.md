@@ -1,4 +1,4 @@
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Interactive prompt loop after search results
 When the `--interactive` / `-i` flag is provided and stdout is a TTY and the `--open` flag is NOT provided, the search command SHALL display results with numbered indices and enter an interactive prompt loop. The prompt SHALL display `Enter card number (o to open, q to quit): ` and accept user input. The loop SHALL continue until the user exits. The prompt SHALL accept `o{N}` input to open a card's Scryfall page in the browser. When `--interactive` is NOT provided, the interactive prompt loop SHALL be skipped entirely regardless of TTY status.
