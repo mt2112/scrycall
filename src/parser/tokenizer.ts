@@ -28,6 +28,8 @@ const KEYWORD_MAP: Record<string, SearchField> = {
   'is': 'is',
   'not': 'not',
   'has': 'has',
+  'order': 'order',
+  'direction': 'direction',
 };
 
 const BARE_KEYWORD_MAP: Record<string, SearchField> = {

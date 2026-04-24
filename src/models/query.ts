@@ -19,7 +19,9 @@ export type SearchField =
   | 'commander'
   | 'is'
   | 'not'
-  | 'has';
+  | 'has'
+  | 'order'
+  | 'direction';
 
 export type Operator = ':' | '=' | '!=' | '>' | '<' | '>=' | '<=';
 
@@ -110,3 +112,21 @@ export type QueryNode =
   | OrNode
   | NotNode
   | ExactNameNode;
+
+// --- Sort types ---
+
+export type SortField = 'name' | 'cmc' | 'power' | 'toughness' | 'rarity' | 'color' | 'set';
+
+export type SortDirection = 'asc' | 'desc';
+
+export type SortOptions = {
+  readonly field: SortField;
+  readonly direction: SortDirection;
+};
+
+export type ParsedQuery = {
+  readonly filter: QueryNode;
+  readonly sort: SortOptions;
+};
+
+export const DEFAULT_SORT: SortOptions = { field: 'name', direction: 'asc' };

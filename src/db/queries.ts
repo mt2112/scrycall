@@ -77,8 +77,10 @@ export function searchCards(
   db: Database.Database,
   whereClause: string,
   params: readonly unknown[],
+  orderBy?: string,
 ): Card[] {
-  const sql = `SELECT DISTINCT cards.* FROM cards ${whereClause}`;
+  const orderClause = orderBy ? ` ORDER BY ${orderBy}` : '';
+  const sql = `SELECT DISTINCT cards.* FROM cards ${whereClause}${orderClause}`;
   const rows = db.prepare(sql).all(...params) as CardRow[];
   return rows.map((row) => mapRowToCard(db, row));
 }

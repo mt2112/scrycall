@@ -14,10 +14,10 @@ export function search(
   const parseResult = parseQuery(queryString);
   if (!parseResult.ok) return parseResult;
 
-  const { sql, params } = buildQuery(parseResult.data);
+  const { sql, params, orderBy } = buildQuery(parseResult.data);
 
   try {
-    const cards = searchCards(db, sql, params);
+    const cards = searchCards(db, sql, params, orderBy);
     return ok(cards);
   } catch (e) {
     return err({

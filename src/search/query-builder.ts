@@ -1,9 +1,10 @@
-import type { QueryNode, Operator } from '../models/query.js';
+import type { QueryNode, Operator, ParsedQuery, SortOptions, SortField } from '../models/query.js';
 
 export interface SqlQuery {
   readonly joins: readonly string[];
   readonly where: string;
   readonly params: readonly unknown[];
+  readonly orderBy?: string;
 }
 
 const RARITY_ORDER: Record<string, number> = {
@@ -12,6 +13,8 @@ const RARITY_ORDER: Record<string, number> = {
   rare: 2,
   mythic: 3,
 };
+
+const RARITY_CASE_EXPR = `CASE cards.rarity WHEN 'common' THEN 0 WHEN 'uncommon' THEN 1 WHEN 'rare' THEN 2 WHEN 'mythic' THEN 3 ELSE 4 END`;
 
 const COLOR_ALIASES: Record<string, string[]> = {
   white: ['W'],
@@ -703,7 +706,39 @@ function buildNodeSql(node: QueryNode): SqlQuery {
   }
 }
 
-export function buildQuery(ast: QueryNode): { sql: string; params: readonly unknown[] } {
+function buildSortOrderBy(sort: SortOptions): string {
+  const dir = sort.direction === 'desc' ? 'DESC' : 'ASC';
+  const nullsLast = sort.direction === 'desc'
+    ? 'CASE WHEN %EXPR% IS NULL THEN 1 ELSE 0 END, %EXPR% DESC'
+    : 'CASE WHEN %EXPR% IS NULL THEN 1 ELSE 0 END, %EXPR% ASC';
+
+  switch (sort.field) {
+    case 'name':
+      return `cards.name COLLATE NOCASE ${dir}`;
+    case 'cmc':
+      return `cards.cmc ${dir}`;
+    case 'power': {
+      const expr = `CAST(NULLIF(cards.power, '*') AS REAL)`;
+      return nullsLast.replaceAll('%EXPR%', expr);
+    }
+    case 'toughness': {
+      const expr = `CAST(NULLIF(cards.toughness, '*') AS REAL)`;
+      return nullsLast.replaceAll('%EXPR%', expr);
+    }
+    case 'rarity':
+      return `${RARITY_CASE_EXPR} ${dir}`;
+    case 'color':
+      return `(SELECT COUNT(*) FROM card_colors WHERE card_id = cards.id) ${dir}`;
+    case 'set':
+      return `cards.set_code COLLATE NOCASE ${dir}`;
+  }
+}
+
+export function buildQuery(input: ParsedQuery | QueryNode): { sql: string; params: readonly unknown[]; orderBy: string } {
+  // Support both ParsedQuery and raw QueryNode for backwards compatibility
+  const ast = 'filter' in input ? input.filter : input;
+  const sort = 'sort' in input ? input.sort : { field: 'name' as SortField, direction: 'asc' as const };
+
   // Reset join counter for each query
   joinCounter = 0;
 
@@ -712,5 +747,5 @@ export function buildQuery(ast: QueryNode): { sql: string; params: readonly unkn
   const sql = `WHERE ${result.where}`;
   const fullSql = joinClause ? `${joinClause} ${sql}` : sql;
 
-  return { sql: fullSql, params: result.params };
+  return { sql: fullSql, params: result.params, orderBy: buildSortOrderBy(sort) };
 }

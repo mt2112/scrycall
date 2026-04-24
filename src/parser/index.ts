@@ -1,10 +1,10 @@
-import type { QueryNode } from '../models/query.js';
+import type { ParsedQuery } from '../models/query.js';
 import type { ParseError } from '../models/errors.js';
 import type { Result } from '../utils/result.js';
 import { tokenize } from './tokenizer.js';
 import { parse } from './parser.js';
 
-export function parseQuery(input: string): Result<QueryNode, ParseError> {
+export function parseQuery(input: string): Result<ParsedQuery, ParseError> {
   const tokens = tokenize(input);
   return parse(tokens);
 }
