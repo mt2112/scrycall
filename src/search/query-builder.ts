@@ -544,6 +544,68 @@ const IS_CONDITIONS: Record<string, () => SqlQuery> = {
     where: `cards.type_line LIKE '%Creature%' AND (cards.type_line LIKE '%Assassin%' OR cards.type_line LIKE '%Mercenary%' OR cards.type_line LIKE '%Pirate%' OR cards.type_line LIKE '%Rogue%' OR cards.type_line LIKE '%Warlock%')`,
     params: [],
   }),
+  // Layout-based conditions
+  split: () => ({
+    joins: [],
+    where: `cards.layout = 'split'`,
+    params: [],
+  }),
+  flip: () => ({
+    joins: [],
+    where: `cards.layout = 'flip'`,
+    params: [],
+  }),
+  transform: () => ({
+    joins: [],
+    where: `cards.layout = 'transform'`,
+    params: [],
+  }),
+  dfc: () => ({
+    joins: [],
+    where: `cards.layout IN ('transform', 'modal_dfc')`,
+    params: [],
+  }),
+  mdfc: () => ({
+    joins: [],
+    where: `cards.layout = 'modal_dfc'`,
+    params: [],
+  }),
+  meld: () => ({
+    joins: [],
+    where: `cards.layout = 'meld'`,
+    params: [],
+  }),
+  leveler: () => ({
+    joins: [],
+    where: `cards.layout = 'leveler'`,
+    params: [],
+  }),
+  saga: () => ({
+    joins: [],
+    where: `cards.layout = 'saga'`,
+    params: [],
+  }),
+  adventure: () => ({
+    joins: [],
+    where: `cards.layout = 'adventure'`,
+    params: [],
+  }),
+};
+
+const TAG_ALIASES: Record<string, string> = {
+  cycleland: 'bikeland',
+  bicycleland: 'bikeland',
+  karoo: 'bounceland',
+  snarl: 'shadowland',
+  battleland: 'tangoland',
+  trikeland: 'triome',
+  tricycleland: 'triome',
+  canland: 'canopyland',
+  crowdland: 'bondland',
+  bbdland: 'bondland',
+  battlebondland: 'bondland',
+  creatureland: 'manland',
+  tdfc: 'transform',
 };
 
 const HAS_CONDITIONS: Record<string, () => SqlQuery> = {
@@ -561,19 +623,24 @@ const HAS_CONDITIONS: Record<string, () => SqlQuery> = {
 
 function buildIsQuery(value: string): SqlQuery {
   const lower = value.toLowerCase();
-  const condition = IS_CONDITIONS[lower];
-  if (!condition) {
-    return { joins: [], where: '1 = 0', params: [] };
+  const resolved = TAG_ALIASES[lower] ?? lower;
+
+  // Check runtime SQL conditions first
+  const condition = IS_CONDITIONS[resolved];
+  if (condition) {
+    return condition();
   }
-  return condition();
+
+  // Fall through to card_tags lookup
+  return {
+    joins: [],
+    where: `EXISTS (SELECT 1 FROM card_tags WHERE card_id = cards.id AND tag = ?)`,
+    params: [resolved],
+  };
 }
 
 function buildNotConditionQuery(value: string): SqlQuery {
   const inner = buildIsQuery(value);
-  if (inner.where === '1 = 0') {
-    // Unknown condition negated → match all
-    return { joins: [], where: '1 = 1', params: [] };
-  }
   return {
     joins: inner.joins,
     where: `NOT (${inner.where})`,

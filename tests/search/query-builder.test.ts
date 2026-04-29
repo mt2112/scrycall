@@ -416,10 +416,11 @@ describe('query-builder', () => {
       expect(sql).toContain("type_line LIKE '%Pirate%'");
     });
 
-    it('should return 1=0 for unknown is: condition', () => {
-      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'nonexistent' };
-      const { sql } = buildQuery(node);
-      expect(sql).toContain('1 = 0');
+    it('should fall through to card_tags for unknown is: condition', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'fetchland' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('card_tags');
+      expect(params).toContain('fetchland');
     });
   });
 
@@ -431,10 +432,12 @@ describe('query-builder', () => {
       expect(sql).toContain("type_line NOT LIKE '%Land%'");
     });
 
-    it('should return 1=1 for unknown not: condition', () => {
-      const node: QueryNode = { kind: 'comparison', field: 'not', operator: ':', value: 'nonexistent' };
-      const { sql } = buildQuery(node);
-      expect(sql).toContain('1 = 1');
+    it('should negate card_tags fallthrough for unknown not: condition', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'not', operator: ':', value: 'fetchland' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('NOT');
+      expect(sql).toContain('card_tags');
+      expect(params).toContain('fetchland');
     });
   });
 
@@ -456,6 +459,77 @@ describe('query-builder', () => {
       const node: QueryNode = { kind: 'comparison', field: 'has', operator: ':', value: 'nonexistent' };
       const { sql } = buildQuery(node);
       expect(sql).toContain('1 = 0');
+    });
+  });
+
+  describe('layout-based is: conditions', () => {
+    it('should build SQL for is:split', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'split' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("layout = 'split'");
+    });
+
+    it('should build SQL for is:dfc (transform or modal_dfc)', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'dfc' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("layout IN ('transform', 'modal_dfc')");
+    });
+
+    it('should build SQL for is:mdfc', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'mdfc' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("layout = 'modal_dfc'");
+    });
+
+    it('should build SQL for is:transform', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'transform' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("layout = 'transform'");
+    });
+
+    it('should build SQL for is:saga', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'saga' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("layout = 'saga'");
+    });
+
+    it('should build SQL for is:adventure', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'adventure' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("layout = 'adventure'");
+    });
+  });
+
+  describe('tag aliases', () => {
+    it('should resolve cycleland to bikeland tag', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'cycleland' };
+      const { sql, params } = buildQuery(node);
+      expect(sql).toContain('card_tags');
+      expect(params).toContain('bikeland');
+    });
+
+    it('should resolve battleland to tangoland tag', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'battleland' };
+      const { sql, params } = buildQuery(node);
+      expect(params).toContain('tangoland');
+    });
+
+    it('should resolve creatureland to manland tag', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'creatureland' };
+      const { sql, params } = buildQuery(node);
+      expect(params).toContain('manland');
+    });
+
+    it('should resolve tdfc alias to transform layout condition', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'tdfc' };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain("layout = 'transform'");
+    });
+
+    it('should resolve snarl to shadowland tag', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'is', operator: ':', value: 'snarl' };
+      const { sql, params } = buildQuery(node);
+      expect(params).toContain('shadowland');
     });
   });
 });
