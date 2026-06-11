@@ -151,4 +151,54 @@ describe('importer', () => {
 
     db.close();
   });
+
+  it('should store layout column', async () => {
+    const db = createTestDb();
+    const cards = [
+      {
+        ...FIXTURE_CARDS[0],
+        layout: 'normal',
+      },
+    ];
+    const stream = Readable.from([JSON.stringify(cards)]);
+    await importCards(db, stream);
+
+    const row = db.prepare('SELECT layout FROM cards WHERE id = ?').get('bolt-uuid') as { layout: string };
+    expect(row.layout).toBe('normal');
+
+    db.close();
+  });
+
+  it('should populate card_tags for matching cards', async () => {
+    const db = createTestDb();
+    const cards = [
+      {
+        id: 'fountain-uuid',
+        oracle_id: 'fountain-oracle',
+        name: 'Hallowed Fountain',
+        mana_cost: null,
+        cmc: 0,
+        type_line: 'Land — Plains Island',
+        oracle_text: 'As Hallowed Fountain enters, you may pay 2 life. If you don\'t, it enters tapped.',
+        colors: [],
+        color_identity: ['W', 'U'],
+        keywords: [],
+        set: 'rna',
+        set_name: 'Ravnica Allegiance',
+        rarity: 'rare',
+        legalities: { modern: 'legal', standard: 'not_legal' },
+        layout: 'normal',
+      },
+    ];
+    const stream = Readable.from([JSON.stringify(cards)]);
+    await importCards(db, stream);
+
+    const tags = db
+      .prepare('SELECT tag FROM card_tags WHERE card_id = ? ORDER BY tag')
+      .all('fountain-uuid') as { tag: string }[];
+    const tagNames = tags.map((t) => t.tag);
+    expect(tagNames).toContain('shockland');
+
+    db.close();
+  });
 });

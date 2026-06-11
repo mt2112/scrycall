@@ -4,6 +4,7 @@ import type { Result } from '../utils/result.js';
 import type { ImportError } from '../models/errors.js';
 import type { ImportProgressCallback } from '../models/index.js';
 import { ok, err } from '../utils/result.js';
+import { tagCard } from './tagger.js';
 import pkg from 'stream-json';
 const { parser } = pkg;
 import sa from 'stream-json/streamers/StreamArray.js';
@@ -16,7 +17,7 @@ export interface ImportStats {
   readonly duration: number;
 }
 
-interface ScryfallCard {
+export interface ScryfallCard {
   id: string;
   oracle_id: string;
   name: string;
@@ -35,6 +36,7 @@ interface ScryfallCard {
   loyalty?: string;
   legalities?: Record<string, string>;
   scryfall_uri?: string;
+  layout?: string;
 }
 
 export async function importCards(
@@ -46,8 +48,8 @@ export async function importCards(
   let cardCount = 0;
 
   const insertCard = db.prepare(
-    `INSERT OR REPLACE INTO cards (id, oracle_id, name, mana_cost, cmc, type_line, oracle_text, power, toughness, set_code, set_name, rarity, loyalty, scryfall_uri)
-     VALUES (@id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text, @power, @toughness, @set_code, @set_name, @rarity, @loyalty, @scryfall_uri)`,
+    `INSERT OR REPLACE INTO cards (id, oracle_id, name, mana_cost, cmc, type_line, oracle_text, power, toughness, set_code, set_name, rarity, loyalty, scryfall_uri, layout)
+     VALUES (@id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text, @power, @toughness, @set_code, @set_name, @rarity, @loyalty, @scryfall_uri, @layout)`,
   );
   const insertColor = db.prepare(
     'INSERT OR IGNORE INTO card_colors (card_id, color) VALUES (?, ?)',
@@ -60,6 +62,9 @@ export async function importCards(
   );
   const insertLegality = db.prepare(
     'INSERT OR REPLACE INTO card_legalities (card_id, format, status) VALUES (?, ?, ?)',
+  );
+  const insertTag = db.prepare(
+    'INSERT OR IGNORE INTO card_tags (card_id, tag) VALUES (?, ?)',
   );
 
   // Collect all cards first, then batch insert
@@ -90,6 +95,7 @@ export async function importCards(
     // Clear existing data and insert all within a single transaction
     onProgress?.({ phase: 'write' });
     const importTransaction = db.transaction(() => {
+      db.exec('DELETE FROM card_tags');
       db.exec('DELETE FROM card_legalities');
       db.exec('DELETE FROM card_keywords');
       db.exec('DELETE FROM card_color_identity');
@@ -112,6 +118,7 @@ export async function importCards(
           rarity: card.rarity,
           loyalty: card.loyalty ?? null,
           scryfall_uri: card.scryfall_uri ?? null,
+          layout: card.layout ?? null,
         });
 
         if (card.colors) {
@@ -136,6 +143,11 @@ export async function importCards(
           for (const [format, status] of Object.entries(card.legalities)) {
             insertLegality.run(card.id, format, status);
           }
+        }
+
+        const tags = tagCard(card);
+        for (const tag of tags) {
+          insertTag.run(card.id, tag);
         }
 
         cardCount++;
