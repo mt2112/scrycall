@@ -4,7 +4,7 @@ import type { Result } from '../utils/result.js';
 import type { ImportError } from '../models/errors.js';
 import type { ImportProgressCallback } from '../models/index.js';
 import { ok, err } from '../utils/result.js';
-import { fetchBulkDataUri } from './fetch.js';
+import { fetchBulkDataUri, IMPORT_REQUEST_HEADERS } from './fetch.js';
 import { importCards } from './importer.js';
 import type { ImportStats } from './importer.js';
 
@@ -30,7 +30,9 @@ export async function runImport(
   onProgress?.({ phase: 'download' });
   let response: Response;
   try {
-    response = await fetch(downloadUri);
+    response = await fetch(downloadUri, {
+      headers: IMPORT_REQUEST_HEADERS,
+    });
     if (!response.ok) {
       return err({
         kind: 'import',

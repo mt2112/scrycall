@@ -13,14 +13,20 @@ interface BulkDataResponse {
 }
 
 const BULK_DATA_URL = 'https://api.scryfall.com/bulk-data';
+export const IMPORT_REQUEST_HEADERS = {
+  'User-Agent': 'scrycall/0.1.0',
+  Accept: 'application/json',
+} as const;
 
 export async function fetchBulkDataUri(): Promise<Result<string, ImportError>> {
   try {
-    const response = await fetch(BULK_DATA_URL);
+    const response = await fetch(BULK_DATA_URL, {
+      headers: IMPORT_REQUEST_HEADERS,
+    });
     if (!response.ok) {
       return err({
         kind: 'import',
-        message: `Failed to fetch bulk data manifest: HTTP ${response.status}`,
+        message: `Failed to fetch bulk data manifest: HTTP ${response.status} ${response.statusText} - ${await response.text()}`,
       });
     }
 

@@ -30,13 +30,6 @@ const FIXTURE_CARDS = [
   },
 ];
 
-vi.mock('../../src/import/fetch.js', () => ({
-  fetchBulkDataUri: vi.fn().mockResolvedValue({
-    ok: true,
-    data: 'https://example.com/oracle-cards.json',
-  }),
-}));
-
 describe('runImport progress', () => {
   it('should invoke onProgress with all phases in order', async () => {
     const json = JSON.stringify(FIXTURE_CARDS);
@@ -47,13 +40,19 @@ describe('runImport progress', () => {
       },
     });
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [{ type: 'oracle_cards', download_uri: 'https://example.com/oracle-cards.json' }],
+        }),
+      })
+      .mockResolvedValueOnce({
         ok: true,
         body: stream,
-      }),
-    );
+      });
+    vi.stubGlobal('fetch', fetchMock);
 
     const db = createTestDb();
     const phases: string[] = [];
@@ -66,6 +65,19 @@ describe('runImport progress', () => {
 
     expect(result.ok).toBe(true);
     expect(phases).toEqual(['manifest', 'download', 'parse', 'write', 'index']);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://api.scryfall.com/bulk-data', {
+      headers: {
+        'User-Agent': 'scrycall/0.1.0',
+        Accept: 'application/json',
+      },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://example.com/oracle-cards.json', {
+      headers: {
+        'User-Agent': 'scrycall/0.1.0',
+        Accept: 'application/json',
+      },
+    });
 
     db.close();
     vi.unstubAllGlobals();
