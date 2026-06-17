@@ -37,6 +37,8 @@ export interface ScryfallCard {
   legalities?: Record<string, string>;
   scryfall_uri?: string;
   layout?: string;
+  released_at?: string;
+  set_type?: string;
 }
 
 export async function importCards(
@@ -66,9 +68,13 @@ export async function importCards(
   const insertTag = db.prepare(
     'INSERT OR IGNORE INTO card_tags (card_id, tag) VALUES (?, ?)',
   );
+  const insertSet = db.prepare(
+    'INSERT OR IGNORE INTO sets (code, name, released_at, set_type) VALUES (?, ?, ?, ?)',
+  );
 
   // Collect all cards first, then batch insert
   const cards: ScryfallCard[] = [];
+  const sets = new Map<string, { name: string; released_at?: string; set_type?: string }>();
 
   try {
     await pipeline(
@@ -79,6 +85,14 @@ export async function importCards(
         objectMode: true,
         transform(chunk: { key: number; value: ScryfallCard }, _encoding, callback): void {
           cards.push(chunk.value);
+          // Collect unique sets
+          if (!sets.has(chunk.value.set)) {
+            sets.set(chunk.value.set, {
+              name: chunk.value.set_name,
+              released_at: chunk.value.released_at,
+              set_type: chunk.value.set_type,
+            });
+          }
           callback();
         },
       }),
@@ -151,6 +165,11 @@ export async function importCards(
         }
 
         cardCount++;
+      }
+
+      // Insert all unique sets
+      for (const [code, setData] of sets) {
+        insertSet.run(code, setData.name, setData.released_at ?? null, setData.set_type ?? null);
       }
 
       // Rebuild FTS5 index

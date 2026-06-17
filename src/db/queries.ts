@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Card, Color, Rarity, FormatLegality, Legality } from '../models/index.js';
+import type { Card, Color, Rarity, FormatLegality, Legality, SetRecord } from '../models/index.js';
 
 interface CardRow {
   id: string;
@@ -129,4 +129,72 @@ export function searchCardsBySubstring(
     cards: rows.map((row) => mapRowToCard(db, row)),
     totalCount: countRow.cnt,
   };
+}
+
+// Default set types to hide (noisy/supplemental)
+const HIDDEN_SET_TYPES = new Set(['token', 'memorabilia', 'minigame', 'predraft', 'treasure_chest', 'vanguard']);
+
+export interface SetSearchOptions {
+  readonly years?: number[];
+  readonly types?: string[];
+  readonly includeAll?: boolean;
+}
+
+export function searchSets(
+  db: Database.Database,
+  term?: string,
+  options?: SetSearchOptions,
+): SetRecord[] {
+  const whereConditions: string[] = [];
+  const params: unknown[] = [];
+
+  // Build WHERE clause for type filtering (unless --all)
+  if (!options?.includeAll && options?.types === undefined) {
+    const hiddenTypes = Array.from(HIDDEN_SET_TYPES).map(() => '?').join(',');
+    whereConditions.push(`set_type NOT IN (${hiddenTypes})`);
+    params.push(...HIDDEN_SET_TYPES);
+  }
+
+  // Explicit type filter
+  if (options?.types && options.types.length > 0) {
+    const typeParams = options.types.map(() => '?').join(',');
+    whereConditions.push(`set_type IN (${typeParams})`);
+    params.push(...options.types);
+  }
+
+  // Explicit year filter
+  if (options?.years && options.years.length > 0) {
+    const yearConditions = options.years
+      .map((year) => `STRFTIME('%Y', released_at) = ?`)
+      .join(' OR ');
+    whereConditions.push(`(${yearConditions})`);
+    params.push(...options.years.map((y) => y.toString()));
+  }
+
+  // Smart term detection
+  if (term) {
+    // Check if term is 4 digits (year)
+    if (/^\d{4}$/.test(term)) {
+      whereConditions.push(`STRFTIME('%Y', released_at) = ?`);
+      params.push(term);
+    }
+    // Check if term is ≤5 non-numeric chars (try code first, then name)
+    else if (term.length <= 5 && !/\d/.test(term)) {
+      whereConditions.push(`(code = ? COLLATE NOCASE OR name LIKE ? COLLATE NOCASE)`);
+      const codePattern = '%' + term.replace(/[%_]/g, '\\$&') + '%';
+      params.push(term, codePattern);
+    }
+    // Otherwise treat as name search
+    else {
+      whereConditions.push(`name LIKE ? COLLATE NOCASE`);
+      const namePattern = '%' + term.replace(/[%_]/g, '\\$&') + '%';
+      params.push(namePattern);
+    }
+  }
+
+  const whereClause = whereConditions.length > 0 ? ' WHERE ' + whereConditions.join(' AND ') : '';
+  const sql = `SELECT code, name, released_at, set_type FROM sets${whereClause} ORDER BY released_at ASC, code ASC`;
+
+  const rows = db.prepare(sql).all(...params) as SetRecord[];
+  return rows;
 }

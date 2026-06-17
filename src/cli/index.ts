@@ -5,6 +5,7 @@ import { openDatabase } from '../db/connection.js';
 import { makeImportCommand } from './commands/import.js';
 import { makeSearchCommand } from './commands/search.js';
 import { makeCardCommand } from './commands/card.js';
+import { makeSetsCommand } from './commands/sets.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -17,6 +18,7 @@ export function createProgram(): Command {
   program.addCommand(makeImportCommand());
   program.addCommand(makeSearchCommand());
   program.addCommand(makeCardCommand());
+  program.addCommand(makeSetsCommand());
 
   return program;
 }

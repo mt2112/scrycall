@@ -49,7 +49,7 @@ describe('database connection', () => {
     const migrations = db.prepare('SELECT version FROM _migrations').all() as {
       version: string;
     }[];
-    expect(migrations).toHaveLength(3);
+    expect(migrations).toHaveLength(4);
 
     db.close();
   });

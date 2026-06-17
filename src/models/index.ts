@@ -1,4 +1,5 @@
 export type { Card, Color, Rarity, Legality, FormatLegality } from './card.js';
+export type { SetRecord } from './set.js';
 export type { ParseError, ImportError, DbError, AppError } from './errors.js';
 
 export type ImportProgressEvent =
