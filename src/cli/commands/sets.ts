@@ -1,7 +1,6 @@
 import { Command } from 'commander';
-import { openDatabase } from '../../db/connection.js';
-import { searchSets } from '../../db/queries.js';
 import type { SetRecord } from '../../models/index.js';
+import { runSetsCommandWorkflow } from '../services/index.js';
 
 export function normalizeMultiValueOption(
   value: string | string[] | undefined,
@@ -56,44 +55,26 @@ export function makeSetsCommand(): Command {
         term: string | undefined,
         options: { year?: string | string[]; type?: string | string[]; all?: boolean },
       ) => {
-        const db = openDatabase();
-        try {
-          // Check if sets table is empty
-          const emptyCheck = db
-            .prepare('SELECT COUNT(*) as cnt FROM sets')
-            .get() as { cnt: number };
+        const years = normalizeMultiValueOption(options.year)?.map((year) => parseInt(year, 10));
+        const types = normalizeMultiValueOption(options.type);
 
-          if (emptyCheck.cnt === 0) {
-            console.error('Sets database is empty. Run `scrycall import` to populate it.');
-            process.exitCode = 1;
-            return;
-          }
+        if (!term && !years && !types) {
+          cmd.help();
+          return;
+        }
 
-          // Parse options
-          const years = normalizeMultiValueOption(options.year)?.map((year) => parseInt(year, 10));
-          const types = normalizeMultiValueOption(options.type);
-
-          // If no term and no filters, show help
-          if (!term && !years && !types) {
-            cmd.help();
-            return;
-          }
-
-          // Search sets
-          const sets = searchSets(db, term, {
+        const exitCode = runSetsCommandWorkflow(
+          {
+            term,
             years,
             types,
             includeAll: options.all,
-          });
+          },
+          { printSets },
+        );
 
-          if (sets.length === 0) {
-            console.log('No sets found.');
-            return;
-          }
-
-          printSets(sets);
-        } finally {
-          db.close();
+        if (exitCode !== 0) {
+          process.exitCode = exitCode;
         }
       },
     );
