@@ -30,6 +30,7 @@ const KEYWORD_MAP: Record<string, SearchField> = {
   'has': 'has',
   'order': 'order',
   'direction': 'direction',
+  'otag': 'oracleTag',
 };
 
 const BARE_KEYWORD_MAP: Record<string, SearchField> = {

@@ -223,3 +223,260 @@ export async function importCards(
   const duration = Date.now() - startTime;
   return ok({ cardCount, duration });
 }
+
+// Oracle Tags Import Interfaces & Types
+interface OracleTagData {
+  id: string;
+  slug: string;
+  label: string;
+  type: string;
+  parent_ids?: string[];
+  child_ids?: string[];
+  taggings?: Array<{ oracle_id: string; weight: string }>;
+  description?: string;
+  aliases?: string[];
+}
+
+interface OracleTagNode {
+  id: string;
+  slug: string;
+  label: string;
+  parent_ids: Set<string>;
+  children: Set<string>;
+  taggings: Array<{ oracle_id: string; weight: string }>;
+  description?: string;
+}
+
+// Build DAG from oracle tags data
+function buildDAG(tags: OracleTagData[]): Map<string, OracleTagNode> {
+  const dag = new Map<string, OracleTagNode>();
+
+  // Create nodes
+  for (const tag of tags) {
+    dag.set(tag.id, {
+      id: tag.id,
+      slug: tag.slug,
+      label: tag.label,
+      parent_ids: new Set(tag.parent_ids ?? []),
+      children: new Set(),
+      taggings: tag.taggings ?? [],
+      description: tag.description,
+    });
+  }
+
+  // Build bidirectional edges
+  for (const [tagId, node] of dag) {
+    for (const parentId of node.parent_ids) {
+      const parent = dag.get(parentId);
+      if (parent) {
+        parent.children.add(tagId);
+      }
+    }
+  }
+
+  return dag;
+}
+
+// Compute transitive closure using BFS
+function computeTransitiveClosure(dag: Map<string, OracleTagNode>, tagId: string): Set<string> {
+  const visited = new Set<string>();
+  const queue = [tagId];
+  const descendants = new Set<string>();
+
+  // BFS to find all descendants
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const node = dag.get(current);
+
+    if (!node || visited.has(current)) continue;
+    visited.add(current);
+
+    // Add all children to descendants and queue
+    for (const childId of node.children) {
+      descendants.add(childId);
+      if (!visited.has(childId)) {
+        queue.push(childId);
+      }
+    }
+  }
+
+  return descendants;
+}
+
+// Detect cycles in DAG (defensive check)
+function detectCycles(dag: Map<string, OracleTagNode>): string[] {
+  const cycles: string[] = [];
+  const visited = new Set<string>();
+  const recursionStack = new Set<string>();
+
+  function dfs(nodeId: string): boolean {
+    visited.add(nodeId);
+    recursionStack.add(nodeId);
+
+    const node = dag.get(nodeId);
+    if (!node) return false;
+
+    for (const childId of node.children) {
+      if (!visited.has(childId)) {
+        if (dfs(childId)) return true;
+      } else if (recursionStack.has(childId)) {
+        cycles.push(`${nodeId} -> ${childId}`);
+        return true;
+      }
+    }
+
+    recursionStack.delete(nodeId);
+    return false;
+  }
+
+  for (const nodeId of dag.keys()) {
+    if (!visited.has(nodeId)) {
+      dfs(nodeId);
+    }
+  }
+
+  return cycles;
+}
+
+export interface OracleImportStats {
+  readonly tagCount: number;
+  readonly taggingCount: number;
+  readonly duration: number;
+}
+
+export async function importOracleTags(
+  db: Database.Database,
+  inputStream: Readable,
+  onProgress?: ImportProgressCallback,
+): Promise<Result<OracleImportStats, ImportError>> {
+  const startTime = Date.now();
+  let tagCount = 0;
+  let taggingCount = 0;
+
+  const insertTag = db.prepare(
+    `INSERT OR REPLACE INTO oracle_tags (tag_id, slug, label, parent_id, description, cached_descendants_json)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+
+  const insertTagging = db.prepare(
+    `INSERT OR REPLACE INTO oracle_taggings (oracle_id, tag_id, weight)
+     VALUES (?, ?, ?)`,
+  );
+
+  try {
+    onProgress?.({ phase: 'parse' });
+
+    const tags: OracleTagData[] = [];
+    const batch: OracleTagData[] = [];
+    const BATCH_SIZE = 100;
+
+    await pipeline(
+      inputStream,
+      parser(),
+      streamArray(),
+      new Transform({
+        objectMode: true,
+        transform(chunk: { key: number; value: OracleTagData }, _encoding, callback): void {
+          try {
+            batch.push(chunk.value);
+            if (batch.length >= BATCH_SIZE) {
+              tags.push(...batch);
+              batch.length = 0;
+            }
+            callback();
+          } catch (error) {
+            callback(
+              new ImportWriteError('Failed to parse oracle tags', {
+                cause: error,
+              }),
+            );
+          }
+        },
+        flush(callback): void {
+          try {
+            tags.push(...batch);
+            callback();
+          } catch (error) {
+            callback(
+              new ImportWriteError('Failed to parse oracle tags', {
+                cause: error,
+              }),
+            );
+          }
+        },
+      }),
+    );
+
+    onProgress?.({ phase: 'write' });
+
+    // Build DAG
+    const dag = buildDAG(tags);
+
+    // Check for cycles (defensive)
+    const cycles = detectCycles(dag);
+    if (cycles.length > 0) {
+      console.warn(`Warning: Detected ${cycles.length} cycles in oracle tags DAG`);
+      for (const cycle of cycles.slice(0, 5)) {
+        console.warn(`  ${cycle}`);
+      }
+    }
+
+    // Compute transitive closures for all tags
+    const closures = new Map<string, Set<string>>();
+    for (const tagId of dag.keys()) {
+      closures.set(tagId, computeTransitiveClosure(dag, tagId));
+    }
+
+    onProgress?.({ phase: 'write' });
+
+    // Clear existing oracle tags
+    db.exec('DELETE FROM oracle_taggings');
+    db.exec('DELETE FROM oracle_tags');
+
+    // Defer foreign key checks during bulk insert
+    db.exec('PRAGMA defer_foreign_keys = ON');
+    db.exec('BEGIN IMMEDIATE');
+
+    // Insert tags with cached descendants
+    for (const [tagId, node] of dag) {
+      const descendants = closures.get(tagId) || new Set();
+      const descendantsJson = JSON.stringify(Array.from(descendants));
+
+      // Find single parent (if hierarchy is tree-like; otherwise use first parent)
+      const parentId = node.parent_ids.size > 0 ? Array.from(node.parent_ids)[0] : null;
+
+      insertTag.run(tagId, node.slug, node.label, parentId ?? null, node.description ?? null, descendantsJson);
+      tagCount++;
+    }
+
+    // Insert taggings for each card-tag association
+    for (const [tagId, node] of dag) {
+      for (const tagging of node.taggings) {
+        insertTagging.run(tagging.oracle_id, tagId, tagging.weight);
+        taggingCount++;
+      }
+    }
+
+    db.exec('COMMIT');
+
+    console.log(`Oracle tags import complete: ${tagCount} tags, ${taggingCount} taggings`);
+  } catch (e) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // Ignore rollback failures
+    }
+
+    const isWriteError = e instanceof ImportWriteError;
+    return err({
+      kind: 'import',
+      message: isWriteError
+        ? `Failed to import oracle tags: ${e.message}`
+        : `Failed to parse oracle tags data: ${e instanceof Error ? e.message : String(e)}`,
+      cause: e instanceof Error ? e : undefined,
+    });
+  }
+
+  const duration = Date.now() - startTime;
+  return ok({ tagCount, taggingCount, duration });
+}

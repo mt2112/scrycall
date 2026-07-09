@@ -35,6 +35,7 @@ Each field has a short and long form. Fields use an operator (`:`, `=`, `>=`, et
 | `e`   | `edition`   | Set code (alias for `s:`)            | `e:lea`              |
 | `f`   | `format`    | Format legality                      | `f:modern`           |
 | `kw`  | `keyword`   | Keyword ability                      | `kw:flying`          |
+| `otag`| `oracletag` | Oracle tags (community-maintained)   | `otag:ramp`          |
 |       | `name`      | Card name (substring match)          | `name:bolt`          |
 |       | `banned`    | Banned in format                     | `banned:modern`      |
 |       | `restricted`| Restricted in format                 | `restricted:vintage` |
@@ -303,6 +304,71 @@ kw:trample        # cards with trample
 
 See [keywords.md](keywords.md) for the complete list of 732 keyword abilities.
 
+### Oracle Tags (`otag:` / `oracletag:`)
+
+Search for cards using community-maintained oracle tags. Oracle tags are hierarchical, category-based tags maintained by the Scryfall community (1,001+ tags).
+
+```
+otag:ramp         # mana acceleration effects
+otag:removal      # creature/permanent removal
+otag:card-draw    # draw effects
+otag:evasion      # evasion effects
+otag:tutoring     # cards that search libraries
+```
+
+**Tag Hierarchy:**
+
+Oracle tags are organized in a directed acyclic graph (DAG) with parent-child relationships. Querying a parent tag expands to include all descendant tags:
+
+```
+otag:effect       # queries both immediate children and their descendants
+otag:creature-type  # includes all creature types in hierarchy
+```
+
+**Weight Filtering:**
+
+Each card-tag association has a weight indicating how strongly that card represents the tag's concept:
+
+| Weight | Meaning |
+|--------|---------|
+| `very_strong` | Card is quintessentially this effect |
+| `strong` | Card clearly exhibits this effect |
+| `median` | Card somewhat exhibits this effect |
+| `weak` | Card tangentially exhibits this effect |
+
+By default, queries return cards tagged with `strong` and `very_strong` weights. Cards with `median` and `weak` weights are excluded.
+
+```
+otag:ramp         # only very_strong and strong weighted cards
+otag!=ramp        # excludes cards with strong+ weights
+```
+
+**Examples:**
+
+```bash
+# Cards that ramp mana
+scrycall search "otag:ramp"
+
+# Removal effects in red
+scrycall search "otag:removal c:red"
+
+# Ramp or card draw
+scrycall search "otag:ramp or otag:card-draw"
+
+# Green ramp creatures
+scrycall search "c:green otag:ramp t:creature"
+
+# Cards that are NOT removal
+scrycall search "-otag:removal"
+
+# Modern legal evasion effects
+scrycall search "f:modern otag:evasion"
+```
+
+**Available Tags:**
+
+For a complete list of oracle tags and their hierarchies, consult the [Scryfall Oracle Tags documentation](https://scryfall.com/docs/advanced/filters) or use `scrycall help tags` (when implemented).
+
 ### Name (`name:`)
 
 Explicit substring search on card name (case-insensitive). Equivalent to bare text search:
@@ -348,6 +414,21 @@ scrycall search "r:mythic t:planeswalker"
 
 # Cards with both deathtouch and lifelink
 scrycall search "kw:deathtouch kw:lifelink"
+
+# Ramp effects in any color
+scrycall search "otag:ramp"
+
+# Red removal spells
+scrycall search "c:red otag:removal"
+
+# Evasion creatures that aren't blue
+scrycall search "t:creature otag:evasion -c:blue"
+
+# Ramp or card draw in green
+scrycall search "c:green (otag:ramp or otag:card-draw)"
+
+# Modern-legal tutoring effects
+scrycall search "f:modern otag:tutoring"
 
 # Grixis-colored (UBR) creatures legal in legacy
 scrycall search "c:grixis t:creature f:legacy"

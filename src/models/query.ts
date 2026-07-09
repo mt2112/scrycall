@@ -21,7 +21,8 @@ export type SearchField =
   | 'not'
   | 'has'
   | 'order'
-  | 'direction';
+  | 'direction'
+  | 'oracleTag';
 
 export type Operator = ':' | '=' | '!=' | '>' | '<' | '>=' | '<=';
 

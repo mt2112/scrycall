@@ -101,6 +101,9 @@ mv>=3 pow>=4 f:modern        # modern-legal cards, 3+ mana value, 4+ power
 t:instant or t:sorcery       # instants or sorceries
 c:blue -kw:flying            # blue cards without flying
 c:red (t:creature or t:instant)  # red creatures or red instants
+otag:ramp c:green            # green mana ramp effects
+otag:removal                 # creature/permanent removal
+otag:card-draw or otag:tutoring  # draw effects or tutors
 ```
 
 See the full syntax reference: **[Query Syntax](query.md)**

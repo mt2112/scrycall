@@ -1,9 +1,11 @@
 import { createInterface } from 'node:readline';
 import { Command } from 'commander';
+import { openDatabase } from '../../db/connection.js';
+import { search } from '../../search/search.js';
+import { getCardByName } from '../../db/queries.js';
 import { printSearchResults, printNumberedSearchResults, printCardDetail } from '../../output/display.js';
 import { openInBrowser } from '../../utils/browser.js';
 import type { Card } from '../../models/index.js';
-import { runSearchCommandWorkflow } from '../services/index.js';
 
 export function promptForSelection(
   cards: readonly Card[],
@@ -63,25 +65,51 @@ export function makeSearchCommand(): Command {
     .option('--open', 'Open search results on Scryfall in your browser')
     .option('-i, --interactive', 'Show numbered results with interactive selection prompt')
     .action(async (query: string, options: { db?: string; open?: boolean; interactive?: boolean }) => {
-      const exitCode = await runSearchCommandWorkflow(
-        {
-          query,
-          dbPath: options.db,
-          open: options.open,
-          interactive: options.interactive,
-          isInteractiveTerminal: process.stdout.isTTY,
-        },
-        {
-          printSearchResults,
-          printNumberedSearchResults,
-          printCardDetail,
-          promptForSelection,
-          openInBrowser,
-        },
-      );
+      const db = openDatabase(options.db);
+      try {
+        const result = search(db, query);
+        if (!result.ok) {
+          if (result.error.kind === 'parse') {
+            console.error(`Parse error: ${result.error.message} (at position ${result.error.position})`);
+          } else {
+            console.error(`Error: ${result.error.message}`);
+          }
+          process.exitCode = 1;
+          return;
+        }
 
-      if (exitCode !== 0) {
-        process.exitCode = exitCode;
+        if (options.open) {
+          const scryfallUrl = `https://scryfall.com/search?q=${encodeURIComponent(query)}&unique=cards&as=grid`;
+          openInBrowser(scryfallUrl);
+          console.error('Opened Scryfall search in browser.');
+          return;
+        }
+
+        if (options.interactive && process.stdout.isTTY && result.data.length > 0) {
+          printNumberedSearchResults(result.data);
+          await promptForSelection(
+            result.data,
+            (card) => {
+              const detail = getCardByName(db, card.name);
+              if (detail) {
+                console.log('');
+                printCardDetail(detail);
+                console.log('');
+              }
+            },
+            (card) => {
+              if (card.scryfallUri) {
+                openInBrowser(card.scryfallUri);
+              } else {
+                console.error('Scryfall URI not available. Re-import cards to enable opening.');
+              }
+            },
+          );
+        } else {
+          printSearchResults(result.data);
+        }
+      } finally {
+        db.close();
       }
     });
 

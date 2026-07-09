@@ -356,4 +356,78 @@ describe('tokenizer', () => {
       ]);
     });
   });
+
+  describe('oracle tag operator', () => {
+    it('should tokenize otag:ramp', () => {
+      const tokens = tokenize('otag:ramp');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'ramp' },
+      ]);
+    });
+
+    it('should tokenize otag:removal', () => {
+      const tokens = tokenize('otag:removal');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'removal' },
+      ]);
+    });
+
+    it('should tokenize otag:draw', () => {
+      const tokens = tokenize('otag:draw');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'draw' },
+      ]);
+    });
+
+    it('should tokenize otag!=removal', () => {
+      const tokens = tokenize('otag!=removal');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'oracleTag', operator: '!=', value: 'removal' },
+      ]);
+    });
+
+    it('should tokenize -otag:ramp with negation', () => {
+      const tokens = tokenize('-otag:ramp');
+      expect(tokens).toEqual([
+        { kind: 'negate' },
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'ramp' },
+      ]);
+    });
+
+    it('should tokenize otag with quoted value', () => {
+      const tokens = tokenize('otag:"card draw"');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'card draw' },
+      ]);
+    });
+
+    it('should tokenize otag in complex query', () => {
+      const tokens = tokenize('otag:ramp c:green pow>=3');
+      expect(tokens).toHaveLength(3);
+      expect(tokens[0]).toEqual({ kind: 'keyword', field: 'oracleTag', operator: ':', value: 'ramp' });
+      expect(tokens[1]).toEqual({ kind: 'keyword', field: 'color', operator: ':', value: 'green' });
+      expect(tokens[2]).toEqual({ kind: 'keyword', field: 'power', operator: '>=', value: '3' });
+    });
+
+    it('should tokenize otag in OR expression', () => {
+      const tokens = tokenize('otag:ramp or otag:removal');
+      expect(tokens).toEqual([
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'ramp' },
+        { kind: 'or' },
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'removal' },
+      ]);
+    });
+
+    it('should tokenize otag in parenthesized group', () => {
+      const tokens = tokenize('(otag:ramp or otag:removal) and c:green');
+      expect(tokens).toEqual([
+        { kind: 'openParen' },
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'ramp' },
+        { kind: 'or' },
+        { kind: 'keyword', field: 'oracleTag', operator: ':', value: 'removal' },
+        { kind: 'closeParen' },
+        { kind: 'keyword', field: 'color', operator: ':', value: 'green' },
+      ]);
+    });
+  });
 });

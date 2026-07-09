@@ -51,6 +51,13 @@ describe('runImport progress', () => {
       .mockResolvedValueOnce({
         ok: true,
         body: stream,
+      })
+      .mockResolvedValueOnce({
+        // Oracle tags fetch (will fail gracefully in background)
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        text: async () => 'Not found',
       });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -65,7 +72,8 @@ describe('runImport progress', () => {
 
     expect(result.ok).toBe(true);
     expect(phases).toEqual(['manifest', 'download', 'parse', 'write', 'index']);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // 3 calls: card manifest, card download, oracle tags manifest (fails gracefully)
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://api.scryfall.com/bulk-data', {
       headers: {
         'User-Agent': 'scrycall/0.1.0',

@@ -27,3 +27,4 @@ coverage/
 
 # Scrycall data
 *.db
+oracle-tags-*.jsonl

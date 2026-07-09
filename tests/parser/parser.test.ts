@@ -255,4 +255,103 @@ describe('parser', () => {
       expect(result.data.sort).toEqual({ field: 'cmc', direction: 'desc' });
     });
   });
+
+  describe('oracle tag queries', () => {
+    it('should parse otag:ramp', () => {
+      const result = parseQuery('otag:ramp');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.filter).toEqual({
+        kind: 'comparison',
+        field: 'oracleTag',
+        operator: ':',
+        value: 'ramp',
+      });
+    });
+
+    it('should parse otag:removal', () => {
+      const result = parseQuery('otag:removal');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.filter).toEqual({
+        kind: 'comparison',
+        field: 'oracleTag',
+        operator: ':',
+        value: 'removal',
+      });
+    });
+
+    it('should parse otag!=removal', () => {
+      const result = parseQuery('otag!=removal');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.filter).toEqual({
+        kind: 'comparison',
+        field: 'oracleTag',
+        operator: '!=',
+        value: 'removal',
+      });
+    });
+
+    it('should parse -otag:ramp with negation', () => {
+      const result = parseQuery('-otag:ramp');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.filter.kind).toBe('not');
+      const node = result.data.filter as { kind: 'not'; child: QueryNode };
+      expect(node.child).toEqual({
+        kind: 'comparison',
+        field: 'oracleTag',
+        operator: ':',
+        value: 'ramp',
+      });
+    });
+
+    it('should parse otag:ramp and c:green', () => {
+      const result = parseQuery('otag:ramp and c:green');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.filter.kind).toBe('and');
+      const node = result.data.filter as { kind: 'and'; left: QueryNode; right: QueryNode };
+      expect(node.left).toEqual({
+        kind: 'comparison',
+        field: 'oracleTag',
+        operator: ':',
+        value: 'ramp',
+      });
+      expect(node.right).toEqual({
+        kind: 'comparison',
+        field: 'color',
+        operator: ':',
+        value: 'green',
+      });
+    });
+
+    it('should parse otag:ramp or otag:removal', () => {
+      const result = parseQuery('otag:ramp or otag:removal');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.filter.kind).toBe('or');
+      const node = result.data.filter as { kind: 'or'; left: QueryNode; right: QueryNode };
+      expect(node.left).toEqual({
+        kind: 'comparison',
+        field: 'oracleTag',
+        operator: ':',
+        value: 'ramp',
+      });
+      expect(node.right).toEqual({
+        kind: 'comparison',
+        field: 'oracleTag',
+        operator: ':',
+        value: 'removal',
+      });
+    });
+
+    it('should parse complex query with otag: (otag:ramp or otag:draw) and c:green', () => {
+      const result = parseQuery('(otag:ramp or otag:draw) and c:green');
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.filter.kind).toBe('and');
+    });
+  });
 });

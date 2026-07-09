@@ -14,7 +14,7 @@ export function search(
   const parseResult = parseQuery(queryString);
   if (!parseResult.ok) return parseResult;
 
-  const { sql, params, orderBy } = buildQuery(parseResult.data);
+  const { sql, params, orderBy } = buildQuery(parseResult.data, db);
 
   try {
     const cards = searchCards(db, sql, params, orderBy);

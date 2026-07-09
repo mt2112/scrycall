@@ -4,8 +4,8 @@ import type { Result } from '../utils/result.js';
 import type { ImportError } from '../models/errors.js';
 import type { ImportProgressCallback } from '../models/index.js';
 import { ok, err } from '../utils/result.js';
-import { fetchBulkDataUri, IMPORT_REQUEST_HEADERS } from './fetch.js';
-import { importCards } from './importer.js';
+import { fetchBulkDataUri, fetchOracleTagsUri, downloadBulkData, IMPORT_REQUEST_HEADERS } from './fetch.js';
+import { importCards, importOracleTags } from './importer.js';
 import type { ImportStats } from './importer.js';
 
 export interface ImportOptions {
@@ -63,9 +63,35 @@ export async function runImport(
   const nodeStream = Readable.fromWeb(response.body as import('node:stream/web').ReadableStream);
 
   onProgress?.({ phase: 'parse' });
-  return importCards(db, nodeStream, onProgress);
+  const cardsResult = await importCards(db, nodeStream, onProgress);
+  if (!cardsResult.ok) return cardsResult;
+
+  // Import oracle tags (allow database to stabilize first)
+  try {
+    // Let the card import transaction fully settle
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const oracleTagsUriResult = await fetchOracleTagsUri();
+    if (!oracleTagsUriResult.ok) {
+      console.warn(`Oracle tags: ${oracleTagsUriResult.error.message}`);
+    } else {
+      const oracleTagsStream = await downloadBulkData(oracleTagsUriResult.data);
+      if (!oracleTagsStream.ok) {
+        console.warn(`Oracle tags: ${oracleTagsStream.error.message}`);
+      } else {
+        const oracleTagsResult = await importOracleTags(db, oracleTagsStream.data);
+        if (!oracleTagsResult.ok) {
+          console.warn(`Oracle tags: ${oracleTagsResult.error.message}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`Oracle tags: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  return cardsResult;
 }
 
-export { importCards } from './importer.js';
-export { fetchBulkDataUri } from './fetch.js';
+export { importCards, importOracleTags } from './importer.js';
+export { fetchBulkDataUri, fetchOracleTagsUri, downloadBulkData } from './fetch.js';
 export type { ImportStats } from './importer.js';

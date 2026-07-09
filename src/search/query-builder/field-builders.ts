@@ -470,6 +470,63 @@ export function buildExactNameQuery(value: string): SqlQuery {
   };
 }
 
+function buildOtagQuery(context: QueryBuildContext, operator: Operator, value: string): SqlQuery {
+  const lower = value.toLowerCase();
+
+  // Get the tag from oracle_tags table
+  if (!context.db) {
+    return {
+      joins: [],
+      where: '0',
+      params: [],
+    };
+  }
+
+  const tagResult = context.db
+    .prepare('SELECT tag_id, cached_descendants_json FROM oracle_tags WHERE LOWER(slug) = ?')
+    .get(lower) as { tag_id: string; cached_descendants_json: string } | undefined;
+
+  if (!tagResult) {
+    // Tag not found - return a query that matches nothing
+    return {
+      joins: [],
+      where: '0',
+      params: [],
+    };
+  }
+
+  // Parse the cached descendants JSON
+  let descendants: string[];
+  try {
+    descendants = JSON.parse(tagResult.cached_descendants_json) as string[];
+  } catch {
+    descendants = [];
+  }
+
+  // Include the tag itself plus all descendants
+  const allTagIds = [tagResult.tag_id, ...descendants];
+
+  // Build the weights filter (default: strong and very_strong)
+  // Future enhancement: support explicit weight syntax like otag:ramp[strong]
+  const weightsFilter = `weight IN ('strong', 'very_strong')`;
+
+  if (operator === '!=') {
+    // NOT otag:X - cards that don't have any of these tags with strong+ weight
+    return {
+      joins: [],
+      where: `NOT EXISTS (SELECT 1 FROM oracle_taggings WHERE oracle_id = cards.oracle_id AND tag_id IN (${allTagIds.map(() => '?').join(',')}) AND ${weightsFilter})`,
+      params: allTagIds,
+    };
+  }
+
+  // Default: otag:X - cards that have any of these tags with strong+ weight
+  return {
+    joins: [],
+    where: `EXISTS (SELECT 1 FROM oracle_taggings WHERE oracle_id = cards.oracle_id AND tag_id IN (${allTagIds.map(() => '?').join(',')}) AND ${weightsFilter})`,
+    params: allTagIds,
+  };
+}
+
 export function buildFieldComparisonSql(
   context: QueryBuildContext,
   field: string,
@@ -513,6 +570,8 @@ export function buildFieldComparisonSql(
       return buildRestrictedQuery(operator, value);
     case 'powtou':
       return buildPowTouQuery(operator, value);
+    case 'oracleTag':
+      return buildOtagQuery(context, operator, value);
     default:
       return null;
   }
