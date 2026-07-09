@@ -201,4 +201,88 @@ describe('importer', () => {
 
     db.close();
   });
+
+  it('should process imports across multiple bounded batches', async () => {
+    const db = createTestDb();
+    const cards = Array.from({ length: 1005 }, (_, index) => ({
+      id: `card-${index}`,
+      oracle_id: `oracle-${index}`,
+      name: `Card ${index}`,
+      mana_cost: '{1}',
+      cmc: 1,
+      type_line: 'Artifact',
+      oracle_text: 'Test card',
+      colors: [] as string[],
+      color_identity: [] as string[],
+      keywords: [] as string[],
+      set: 'tst',
+      set_name: 'Test Set',
+      rarity: 'common',
+      legalities: { modern: 'legal' },
+    }));
+
+    const result = await importCards(db, Readable.from([JSON.stringify(cards)]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.cardCount).toBe(1005);
+
+    const row = db.prepare('SELECT COUNT(*) as cnt FROM cards').get() as { cnt: number };
+    expect(row.cnt).toBe(1005);
+
+    db.close();
+  });
+
+  it('should roll back all writes if a later batch fails', async () => {
+    const db = createTestDb();
+    await importCards(db, createFixtureStream());
+
+    const validCards = Array.from({ length: 501 }, (_, index) => ({
+      id: `batch-card-${index}`,
+      oracle_id: `batch-oracle-${index}`,
+      name: `Batch Card ${index}`,
+      mana_cost: '{1}',
+      cmc: 1,
+      type_line: 'Artifact',
+      oracle_text: 'Batch card',
+      colors: [] as string[],
+      color_identity: [] as string[],
+      keywords: [] as string[],
+      set: 'tst',
+      set_name: 'Test Set',
+      rarity: 'common',
+      legalities: { modern: 'legal' },
+    }));
+
+    const invalidCard = {
+      id: 'invalid-card',
+      oracle_id: 'invalid-oracle',
+      name: undefined,
+      mana_cost: '{1}',
+      cmc: 1,
+      type_line: 'Artifact',
+      oracle_text: 'Invalid card',
+      colors: [] as string[],
+      color_identity: [] as string[],
+      keywords: [] as string[],
+      set: 'tst',
+      set_name: 'Test Set',
+      rarity: 'common',
+      legalities: { modern: 'legal' },
+    };
+
+    const result = await importCards(
+      db,
+      Readable.from([JSON.stringify([...validCards, invalidCard])]),
+    );
+
+    expect(result.ok).toBe(false);
+
+    const existing = getCardByName(db, 'Lightning Bolt');
+    expect(existing).toBeDefined();
+
+    const failedRow = db.prepare('SELECT COUNT(*) as cnt FROM cards WHERE id = ?').get('batch-card-0') as { cnt: number };
+    expect(failedRow.cnt).toBe(0);
+
+    db.close();
+  });
 });

@@ -82,4 +82,20 @@ describe('runImport progress', () => {
     db.close();
     vi.unstubAllGlobals();
   });
+
+  it('should reject unsupported force imports before network activity', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const db = createTestDb();
+    const result = await runImport(db, { force: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toBe('--force is not currently supported; run scrycall import without --force.');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    db.close();
+    vi.unstubAllGlobals();
+  });
 });

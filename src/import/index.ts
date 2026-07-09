@@ -17,7 +17,14 @@ export async function runImport(
   db: Database.Database,
   options: ImportOptions = {},
 ): Promise<Result<ImportStats, ImportError>> {
-  const { onProgress } = options;
+  const { onProgress, force } = options;
+
+  if (force) {
+    return err({
+      kind: 'import',
+      message: '--force is not currently supported; run scrycall import without --force.',
+    });
+  }
 
   // Fetch the download URI
   onProgress?.({ phase: 'manifest' });

@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const MIGRATIONS_DIR = join(__dirname, 'migrations');
 
-export function runMigrations(db: Database.Database): void {
+export function runMigrations(db: Database.Database, migrationsDir: string = MIGRATIONS_DIR): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS _migrations (
       version TEXT PRIMARY KEY,
@@ -24,11 +24,12 @@ export function runMigrations(db: Database.Database): void {
 
   let files: string[];
   try {
-    files = readdirSync(MIGRATIONS_DIR)
+    files = readdirSync(migrationsDir)
       .filter((f) => f.endsWith('.sql'))
       .sort();
-  } catch {
-    return;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Migration assets are missing: unable to read migrations directory at ${migrationsDir}: ${detail}`);
   }
 
   const applyMigration = db.transaction((version: string, sql: string) => {
@@ -40,7 +41,7 @@ export function runMigrations(db: Database.Database): void {
     const version = file.replace('.sql', '');
     if (applied.has(version)) continue;
 
-    const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf-8');
+    const sql = readFileSync(join(migrationsDir, file), 'utf-8');
     applyMigration(version, sql);
   }
 }

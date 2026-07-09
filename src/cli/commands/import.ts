@@ -16,6 +16,12 @@ export function makeImportCommand(): Command {
     .description('Download and import Scryfall bulk card data')
     .option('--force', 'Re-download even if data is recent')
     .action(async (options: { force?: boolean }) => {
+      if (options.force) {
+        console.error('Import failed: --force is not currently supported; run scrycall import without --force.');
+        process.exitCode = 1;
+        return;
+      }
+
       const db = openDatabase();
       try {
         const result = await runImport(db, {

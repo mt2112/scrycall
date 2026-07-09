@@ -12,6 +12,15 @@ const { streamArray } = sa;
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 
+const IMPORT_BATCH_SIZE = 500;
+
+class ImportWriteError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'ImportWriteError';
+  }
+}
+
 export interface ImportStats {
   readonly cardCount: number;
   readonly duration: number;
@@ -72,11 +81,78 @@ export async function importCards(
     'INSERT OR IGNORE INTO sets (code, name, released_at, set_type) VALUES (?, ?, ?, ?)',
   );
 
-  // Collect all cards first, then batch insert
-  const cards: ScryfallCard[] = [];
   const sets = new Map<string, { name: string; released_at?: string; set_type?: string }>();
 
+  function insertCardGraph(card: ScryfallCard): void {
+    insertCard.run({
+      id: card.id,
+      oracle_id: card.oracle_id,
+      name: card.name,
+      mana_cost: card.mana_cost ?? null,
+      cmc: card.cmc ?? 0,
+      type_line: card.type_line ?? '',
+      oracle_text: card.oracle_text ?? null,
+      power: card.power ?? null,
+      toughness: card.toughness ?? null,
+      set_code: card.set,
+      set_name: card.set_name,
+      rarity: card.rarity,
+      loyalty: card.loyalty ?? null,
+      scryfall_uri: card.scryfall_uri ?? null,
+      layout: card.layout ?? null,
+    });
+
+    if (card.colors) {
+      for (const color of card.colors) {
+        insertColor.run(card.id, color);
+      }
+    }
+
+    if (card.color_identity) {
+      for (const color of card.color_identity) {
+        insertIdentity.run(card.id, color);
+      }
+    }
+
+    if (card.keywords) {
+      for (const kw of card.keywords) {
+        insertKeyword.run(card.id, kw);
+      }
+    }
+
+    if (card.legalities) {
+      for (const [format, status] of Object.entries(card.legalities)) {
+        insertLegality.run(card.id, format, status);
+      }
+    }
+
+    const tags = tagCard(card);
+    for (const tag of tags) {
+      insertTag.run(card.id, tag);
+    }
+
+    cardCount++;
+  }
+
+  function flushBatch(batch: ScryfallCard[]): void {
+    for (const card of batch) {
+      insertCardGraph(card);
+    }
+    batch.length = 0;
+  }
+
   try {
+    onProgress?.({ phase: 'write' });
+    db.exec('BEGIN IMMEDIATE');
+    db.exec('DELETE FROM card_tags');
+    db.exec('DELETE FROM card_legalities');
+    db.exec('DELETE FROM card_keywords');
+    db.exec('DELETE FROM card_color_identity');
+    db.exec('DELETE FROM card_colors');
+    db.exec('DELETE FROM cards');
+
+    const batch: ScryfallCard[] = [];
+
     await pipeline(
       inputStream,
       parser(),
@@ -84,104 +160,62 @@ export async function importCards(
       new Transform({
         objectMode: true,
         transform(chunk: { key: number; value: ScryfallCard }, _encoding, callback): void {
-          cards.push(chunk.value);
-          // Collect unique sets
-          if (!sets.has(chunk.value.set)) {
-            sets.set(chunk.value.set, {
-              name: chunk.value.set_name,
-              released_at: chunk.value.released_at,
-              set_type: chunk.value.set_type,
-            });
+          try {
+            batch.push(chunk.value);
+            if (!sets.has(chunk.value.set)) {
+              sets.set(chunk.value.set, {
+                name: chunk.value.set_name,
+                released_at: chunk.value.released_at,
+                set_type: chunk.value.set_type,
+              });
+            }
+            if (batch.length >= IMPORT_BATCH_SIZE) {
+              flushBatch(batch);
+            }
+            callback();
+          } catch (error) {
+            callback(
+              new ImportWriteError('Failed to write parsed cards to the database', {
+                cause: error,
+              }),
+            );
           }
-          callback();
+        },
+        flush(callback): void {
+          try {
+            flushBatch(batch);
+            callback();
+          } catch (error) {
+            callback(
+              new ImportWriteError('Failed to write parsed cards to the database', {
+                cause: error,
+              }),
+            );
+          }
         },
       }),
     );
+
+    for (const [code, setData] of sets) {
+      insertSet.run(code, setData.name, setData.released_at ?? null, setData.set_type ?? null);
+    }
+
+    onProgress?.({ phase: 'index' });
+    db.exec("INSERT INTO cards_fts(cards_fts) VALUES('rebuild')");
+    db.exec('COMMIT');
   } catch (e) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // Ignore rollback failures so the original import error is preserved.
+    }
+
+    const isWriteError = e instanceof ImportWriteError;
     return err({
       kind: 'import',
-      message: `Failed to parse card data: ${e instanceof Error ? e.message : String(e)}`,
-      cause: e instanceof Error ? e : undefined,
-    });
-  }
-
-  try {
-    // Clear existing data and insert all within a single transaction
-    onProgress?.({ phase: 'write' });
-    const importTransaction = db.transaction(() => {
-      db.exec('DELETE FROM card_tags');
-      db.exec('DELETE FROM card_legalities');
-      db.exec('DELETE FROM card_keywords');
-      db.exec('DELETE FROM card_color_identity');
-      db.exec('DELETE FROM card_colors');
-      db.exec('DELETE FROM cards');
-
-      for (const card of cards) {
-        insertCard.run({
-          id: card.id,
-          oracle_id: card.oracle_id,
-          name: card.name,
-          mana_cost: card.mana_cost ?? null,
-          cmc: card.cmc ?? 0,
-          type_line: card.type_line ?? '',
-          oracle_text: card.oracle_text ?? null,
-          power: card.power ?? null,
-          toughness: card.toughness ?? null,
-          set_code: card.set,
-          set_name: card.set_name,
-          rarity: card.rarity,
-          loyalty: card.loyalty ?? null,
-          scryfall_uri: card.scryfall_uri ?? null,
-          layout: card.layout ?? null,
-        });
-
-        if (card.colors) {
-          for (const color of card.colors) {
-            insertColor.run(card.id, color);
-          }
-        }
-
-        if (card.color_identity) {
-          for (const color of card.color_identity) {
-            insertIdentity.run(card.id, color);
-          }
-        }
-
-        if (card.keywords) {
-          for (const kw of card.keywords) {
-            insertKeyword.run(card.id, kw);
-          }
-        }
-
-        if (card.legalities) {
-          for (const [format, status] of Object.entries(card.legalities)) {
-            insertLegality.run(card.id, format, status);
-          }
-        }
-
-        const tags = tagCard(card);
-        for (const tag of tags) {
-          insertTag.run(card.id, tag);
-        }
-
-        cardCount++;
-      }
-
-      // Insert all unique sets
-      for (const [code, setData] of sets) {
-        insertSet.run(code, setData.name, setData.released_at ?? null, setData.set_type ?? null);
-      }
-
-      // Rebuild FTS5 index
-      onProgress?.({ phase: 'index' });
-      db.exec("INSERT INTO cards_fts(cards_fts) VALUES('rebuild')");
-    });
-
-    importTransaction();
-  } catch (e) {
-    return err({
-      kind: 'import',
-      message: `Failed to import cards into database: ${e instanceof Error ? e.message : String(e)}`,
+      message: isWriteError
+        ? `Failed to import cards into database: ${e.message}`
+        : `Failed to parse card data: ${e instanceof Error ? e.message : String(e)}`,
       cause: e instanceof Error ? e : undefined,
     });
   }

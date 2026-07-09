@@ -8,15 +8,15 @@ The system SHALL provide a CLI entry point using Commander.js that registers `im
 - **THEN** it displays available commands: import, search, card, sets
 
 ### Requirement: Import command downloads and populates database
-The `import` command SHALL download oracle_cards from the Scryfall Bulk Data API and populate the local SQLite database. A `--force` flag SHALL force re-download even if data is recent. The command SHALL display a status message for each import phase as it begins: fetching catalog, downloading data, parsing cards, writing to database, and rebuilding search index.
+The `import` command SHALL download oracle_cards from the Scryfall Bulk Data API and populate the local SQLite database. Until the application has real freshness metadata, the `--force` flag SHALL be rejected explicitly with an error instead of changing import behavior. The command SHALL display a status message for each import phase as it begins: fetching catalog, downloading data, parsing cards, writing to database, and rebuilding search index.
 
 #### Scenario: First import with progress messages
 - **WHEN** `scrycall import` is run with no existing database
 - **THEN** it displays phase messages as each stage begins, followed by a final summary with card count and duration
 
-#### Scenario: Force re-import
-- **WHEN** `scrycall import --force` is run with an existing database
-- **THEN** it re-downloads and re-imports all cards regardless of freshness, displaying phase messages throughout
+#### Scenario: Force flag is rejected explicitly
+- **WHEN** `scrycall import --force` is run before freshness metadata support exists
+- **THEN** the command exits with an error explaining that `--force` is not currently supported and instructs the user to run `scrycall import` without the flag
 
 #### Scenario: Import failure displays error
 - **WHEN** `scrycall import` is run and a phase fails

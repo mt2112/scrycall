@@ -65,4 +65,14 @@ describe('database connection', () => {
 
     db.close();
   });
+
+  it('should fail fast when migration assets are missing', () => {
+    const db = createTestDb();
+
+    expect(() => runMigrations(db, 'C:/repos/scrycall/does-not-exist-migrations')).toThrow(
+      /Migration assets are missing: unable to read migrations directory/,
+    );
+
+    db.close();
+  });
 });
