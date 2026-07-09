@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildQuery } from '../../src/search/query-builder.js';
-import type { QueryNode } from '../../src/models/query.js';
+import type { ParsedQuery, QueryNode } from '../../src/models/query.js';
 
 describe('query-builder', () => {
   describe('comparison nodes', () => {
@@ -111,6 +111,46 @@ describe('query-builder', () => {
       };
       const { sql } = buildQuery(node);
       expect(sql).toContain('NOT');
+    });
+
+    it('should isolate joined comparisons inside OR subqueries', () => {
+      const node: QueryNode = {
+        kind: 'or',
+        left: { kind: 'comparison', field: 'format', operator: ':', value: 'modern' },
+        right: { kind: 'comparison', field: 'keyword', operator: ':', value: 'flying' },
+      };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('cards.id IN (SELECT cards.id FROM cards JOIN card_legalities cl0');
+      expect(sql).toContain('cards.id IN (SELECT cards.id FROM cards JOIN card_keywords ck1');
+    });
+
+    it('should isolate joined comparisons inside NOT subqueries', () => {
+      const node: QueryNode = {
+        kind: 'not',
+        child: { kind: 'comparison', field: 'format', operator: ':', value: 'modern' },
+      };
+      const { sql } = buildQuery(node);
+      expect(sql).toContain('cards.id NOT IN (SELECT cards.id FROM cards JOIN card_legalities cl0');
+    });
+  });
+
+  describe('query build state', () => {
+    it('should reset alias allocation for each build', () => {
+      const node: QueryNode = { kind: 'comparison', field: 'format', operator: ':', value: 'modern' };
+      const first = buildQuery(node);
+      const second = buildQuery(node);
+      expect(first.sql).toContain('JOIN card_legalities cl0');
+      expect(second.sql).toContain('JOIN card_legalities cl0');
+    });
+
+    it('should build explicit sort metadata without changing the buildQuery API', () => {
+      const query: ParsedQuery = {
+        filter: { kind: 'comparison', field: 'color', operator: ':', value: 'red' },
+        sort: { field: 'power', direction: 'desc' },
+      };
+      const { orderBy } = buildQuery(query);
+      expect(orderBy).toContain('CAST(NULLIF(cards.power,');
+      expect(orderBy).toContain('DESC');
     });
   });
 
