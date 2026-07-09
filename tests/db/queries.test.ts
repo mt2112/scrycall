@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../../src/db/migrations.js';
 import { searchCards, getCardByName, searchCardsByPrefix, searchCardsBySubstring } from '../../src/db/queries.js';
@@ -130,6 +130,40 @@ describe('queries', () => {
     it('should return empty array when no matches', () => {
       const cards = searchCards(db, 'WHERE cards.rarity = ?', ['mythic']);
       expect(cards).toHaveLength(0);
+    });
+
+    it('should load auxiliary card data once per normalized table for a result set', () => {
+      seedCard(db);
+      seedCard(db, {
+        id: 'test-id-2',
+        oracle_id: 'oracle-2',
+        name: 'Serra Angel',
+        mana_cost: '{3}{W}{W}',
+        cmc: 5,
+        type_line: 'Creature — Angel',
+        oracle_text: 'Flying, vigilance',
+        power: '4',
+        toughness: '4',
+        set_code: 'lea',
+        set_name: 'Limited Edition Alpha',
+        rarity: 'uncommon',
+        colors: ['W'],
+        color_identity: ['W'],
+        keywords: ['Flying', 'Vigilance'],
+      });
+
+      const originalPrepare = db.prepare.bind(db);
+      const prepareSpy = vi.spyOn(db, 'prepare').mockImplementation((sql: string) => originalPrepare(sql));
+
+      const cards = searchCards(db, 'WHERE cards.rarity IN (?, ?)', ['common', 'uncommon']);
+
+      expect(cards).toHaveLength(2);
+
+      const statements = prepareSpy.mock.calls.map(([sql]) => sql);
+      expect(statements.filter((sql) => sql === 'SELECT card_id, color FROM card_colors WHERE card_id IN (?, ?)')).toHaveLength(1);
+      expect(statements.filter((sql) => sql === 'SELECT card_id, color FROM card_color_identity WHERE card_id IN (?, ?)')).toHaveLength(1);
+      expect(statements.filter((sql) => sql === 'SELECT card_id, keyword FROM card_keywords WHERE card_id IN (?, ?)')).toHaveLength(1);
+      expect(statements.filter((sql) => sql === 'SELECT card_id, format, status FROM card_legalities WHERE card_id IN (?, ?)')).toHaveLength(1);
     });
   });
 

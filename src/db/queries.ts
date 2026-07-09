@@ -1,6 +1,8 @@
 import type Database from 'better-sqlite3';
 import type { Card, Color, Rarity, FormatLegality, Legality, SetRecord } from '../models/index.js';
 
+const HYDRATION_BATCH_SIZE = 500;
+
 interface CardRow {
   id: string;
   oracle_id: string;
@@ -18,39 +20,98 @@ interface CardRow {
   scryfall_uri: string | null;
 }
 
-function getCardColors(db: Database.Database, cardId: string): readonly Color[] {
-  const rows = db
-    .prepare('SELECT color FROM card_colors WHERE card_id = ?')
-    .all(cardId) as { color: string }[];
-  return rows.map((r) => r.color as Color);
+interface CardAuxData {
+  readonly colors: readonly Color[];
+  readonly colorIdentity: readonly Color[];
+  readonly keywords: readonly string[];
+  readonly legalities: FormatLegality;
 }
 
-function getCardColorIdentity(db: Database.Database, cardId: string): readonly Color[] {
-  const rows = db
-    .prepare('SELECT color FROM card_color_identity WHERE card_id = ?')
-    .all(cardId) as { color: string }[];
-  return rows.map((r) => r.color as Color);
-}
-
-function getCardKeywords(db: Database.Database, cardId: string): readonly string[] {
-  const rows = db
-    .prepare('SELECT keyword FROM card_keywords WHERE card_id = ?')
-    .all(cardId) as { keyword: string }[];
-  return rows.map((r) => r.keyword);
-}
-
-function getCardLegalities(db: Database.Database, cardId: string): FormatLegality {
-  const rows = db
-    .prepare('SELECT format, status FROM card_legalities WHERE card_id = ?')
-    .all(cardId) as { format: string; status: string }[];
-  const legalities: Record<string, Legality> = {};
-  for (const row of rows) {
-    legalities[row.format] = row.status as Legality;
+function chunkCardIds(cardIds: readonly string[]): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < cardIds.length; index += HYDRATION_BATCH_SIZE) {
+    chunks.push(cardIds.slice(index, index + HYDRATION_BATCH_SIZE));
   }
-  return legalities;
+  return chunks;
 }
 
-function mapRowToCard(db: Database.Database, row: CardRow): Card {
+function createStringArrayMap(cardIds: readonly string[]): Map<string, string[]> {
+  return new Map(cardIds.map((cardId) => [cardId, []]));
+}
+
+function loadStringArrayMap(
+  db: Database.Database,
+  cardIds: readonly string[],
+  tableName: 'card_colors' | 'card_color_identity' | 'card_keywords',
+  valueColumn: 'color' | 'keyword',
+): Map<string, string[]> {
+  const valuesByCardId = createStringArrayMap(cardIds);
+
+  for (const cardIdChunk of chunkCardIds(cardIds)) {
+    const placeholders = cardIdChunk.map(() => '?').join(', ');
+    const sql = `SELECT card_id, ${valueColumn} FROM ${tableName} WHERE card_id IN (${placeholders})`;
+    const rows = db.prepare(sql).all(...cardIdChunk) as { card_id: string; color?: string; keyword?: string }[];
+
+    for (const row of rows) {
+      const values = valuesByCardId.get(row.card_id);
+      if (!values) continue;
+      if (valueColumn === 'color' && row.color) {
+        values.push(row.color);
+      }
+      if (valueColumn === 'keyword' && row.keyword) {
+        values.push(row.keyword);
+      }
+    }
+  }
+
+  return valuesByCardId;
+}
+
+function loadLegalitiesMap(db: Database.Database, cardIds: readonly string[]): Map<string, FormatLegality> {
+  const legalitiesByCardId = new Map<string, FormatLegality>(
+    cardIds.map((cardId) => [cardId, {}]),
+  );
+
+  for (const cardIdChunk of chunkCardIds(cardIds)) {
+    const placeholders = cardIdChunk.map(() => '?').join(', ');
+    const sql = `SELECT card_id, format, status FROM card_legalities WHERE card_id IN (${placeholders})`;
+    const rows = db.prepare(sql).all(...cardIdChunk) as {
+      card_id: string;
+      format: string;
+      status: string;
+    }[];
+
+    for (const row of rows) {
+      const legalities = legalitiesByCardId.get(row.card_id);
+      if (!legalities) continue;
+      legalities[row.format] = row.status as Legality;
+    }
+  }
+
+  return legalitiesByCardId;
+}
+
+function buildCardAuxData(db: Database.Database, rows: readonly CardRow[]): Map<string, CardAuxData> {
+  const cardIds = rows.map((row) => row.id);
+  const colorsByCardId = loadStringArrayMap(db, cardIds, 'card_colors', 'color');
+  const colorIdentityByCardId = loadStringArrayMap(db, cardIds, 'card_color_identity', 'color');
+  const keywordsByCardId = loadStringArrayMap(db, cardIds, 'card_keywords', 'keyword');
+  const legalitiesByCardId = loadLegalitiesMap(db, cardIds);
+
+  return new Map(
+    cardIds.map((cardId) => [
+      cardId,
+      {
+        colors: (colorsByCardId.get(cardId) ?? []) as readonly Color[],
+        colorIdentity: (colorIdentityByCardId.get(cardId) ?? []) as readonly Color[],
+        keywords: keywordsByCardId.get(cardId) ?? [],
+        legalities: legalitiesByCardId.get(cardId) ?? {},
+      },
+    ]),
+  );
+}
+
+function mapRowToCard(row: CardRow, auxData: CardAuxData): Card {
   return {
     id: row.id,
     oracleId: row.oracle_id,
@@ -61,16 +122,32 @@ function mapRowToCard(db: Database.Database, row: CardRow): Card {
     oracleText: row.oracle_text,
     power: row.power,
     toughness: row.toughness,
-    colors: getCardColors(db, row.id),
-    colorIdentity: getCardColorIdentity(db, row.id),
-    keywords: getCardKeywords(db, row.id),
+    colors: auxData.colors,
+    colorIdentity: auxData.colorIdentity,
+    keywords: auxData.keywords,
     set: row.set_code,
     setName: row.set_name,
     rarity: row.rarity as Rarity,
-    legalities: getCardLegalities(db, row.id),
+    legalities: auxData.legalities,
     loyalty: row.loyalty,
     scryfallUri: row.scryfall_uri,
   };
+}
+
+function hydrateCardRows(db: Database.Database, rows: readonly CardRow[]): Card[] {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const auxDataByCardId = buildCardAuxData(db, rows);
+  return rows.map((row) =>
+    mapRowToCard(row, auxDataByCardId.get(row.id) ?? {
+      colors: [],
+      colorIdentity: [],
+      keywords: [],
+      legalities: {},
+    }),
+  );
 }
 
 export function searchCards(
@@ -82,7 +159,7 @@ export function searchCards(
   const orderClause = orderBy ? ` ORDER BY ${orderBy}` : '';
   const sql = `SELECT DISTINCT cards.* FROM cards ${whereClause}${orderClause}`;
   const rows = db.prepare(sql).all(...params) as CardRow[];
-  return rows.map((row) => mapRowToCard(db, row));
+  return hydrateCardRows(db, rows);
 }
 
 export function getCardByName(db: Database.Database, name: string): Card | undefined {
@@ -90,7 +167,7 @@ export function getCardByName(db: Database.Database, name: string): Card | undef
     | CardRow
     | undefined;
   if (!row) return undefined;
-  return mapRowToCard(db, row);
+  return hydrateCardRows(db, [row])[0];
 }
 
 const FUZZY_MATCH_LIMIT = 10;
@@ -102,7 +179,7 @@ export function searchCardsByPrefix(db: Database.Database, prefix: string): Card
       `SELECT * FROM cards WHERE name LIKE ? ESCAPE '\\' COLLATE NOCASE ORDER BY name COLLATE NOCASE LIMIT ?`,
     )
     .all(pattern, FUZZY_MATCH_LIMIT) as CardRow[];
-  return rows.map((row) => mapRowToCard(db, row));
+  return hydrateCardRows(db, rows);
 }
 
 export interface SubstringSearchResult {
@@ -126,7 +203,7 @@ export function searchCardsBySubstring(
     )
     .all(pattern, FUZZY_MATCH_LIMIT) as CardRow[];
   return {
-    cards: rows.map((row) => mapRowToCard(db, row)),
+    cards: hydrateCardRows(db, rows),
     totalCount: countRow.cnt,
   };
 }
