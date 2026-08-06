@@ -1,3 +1,9 @@
+---
+name: Code Analyzer Agent
+description: Analyzes the codebase and produces architecture summaries.
+tools: [read, search]
+---
+
 # Code Analyzer Agent
 
 ## Description
